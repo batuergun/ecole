@@ -7,17 +7,30 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { Play, Upload, BarChart3, Cloud, Monitor } from "lucide-react";
+import { Play, Upload, BarChart3, Cloud, Monitor, Cpu } from "lucide-react";
 
 const MODEL_OPTIONS = [
-  { value: "mistralai/Ministral-3b-instruct", label: "Ministral 3B (Fast)" },
-  { value: "mistralai/Ministral-8B-Instruct-2410", label: "Ministral 8B (Quality)" },
+  { value: "mistralai/Ministral-3-3B-Reasoning-2512", label: "Ministral 3B (Fast)" },
+  { value: "mistralai/Ministral-3-8B-Reasoning-2512", label: "Ministral 8B (Quality)" },
 ];
 
 const COMPUTE_OPTIONS = [
   { value: "local", label: "Local GPU", icon: Monitor, description: "Train on your own GPU" },
   { value: "hf_jobs", label: "HF Jobs", icon: Cloud, description: "Train on HuggingFace infrastructure" },
 ];
+
+const HF_FLAVOR_OPTIONS = [
+  { value: "a10g-small", label: "A10G Small", vram: "24 GB", description: "1x NVIDIA A10G" },
+  { value: "a10g-large", label: "A10G Large", vram: "24 GB", description: "1x A10G + more CPU/RAM" },
+  { value: "l4x1", label: "L4 x1", vram: "24 GB", description: "1x NVIDIA L4" },
+  { value: "l4x4", label: "L4 x4", vram: "96 GB", description: "4x NVIDIA L4" },
+  { value: "a100-large", label: "A100 Large", vram: "80 GB", description: "1x NVIDIA A100" },
+];
+
+const RECOMMENDED_FLAVORS: Record<string, string> = {
+  "mistralai/Ministral-3-3B-Reasoning-2512": "a10g-small",
+  "mistralai/Ministral-3-8B-Reasoning-2512": "a10g-large",
+};
 
 export function TrainingTab({ projectId }: { projectId: string }) {
   const queryClient = useQueryClient();
@@ -27,6 +40,7 @@ export function TrainingTab({ projectId }: { projectId: string }) {
   const [batchSize, setBatchSize] = useState("4");
   const [loraR, setLoraR] = useState("16");
   const [computeMode, setComputeMode] = useState("local");
+  const [hfFlavor, setHfFlavor] = useState(RECOMMENDED_FLAVORS[MODEL_OPTIONS[0].value] || "a10g-small");
   const [hfNamespace, setHfNamespace] = useState("");
 
   const { data: runs } = useQuery({
@@ -56,6 +70,7 @@ export function TrainingTab({ projectId }: { projectId: string }) {
           bf16: true,
         },
         compute_mode: computeMode,
+        ...(computeMode === "hf_jobs" ? { hf_flavor: hfFlavor } : {}),
         ...(computeMode === "hf_jobs" && hfNamespace ? { hf_namespace: hfNamespace } : {}),
       }),
     onSuccess: () => {
@@ -139,7 +154,11 @@ export function TrainingTab({ projectId }: { projectId: string }) {
               <Label>Base Model</Label>
               <select
                 value={baseModel}
-                onChange={(e) => setBaseModel(e.target.value)}
+                onChange={(e) => {
+                  const model = e.target.value;
+                  setBaseModel(model);
+                  if (RECOMMENDED_FLAVORS[model]) setHfFlavor(RECOMMENDED_FLAVORS[model]);
+                }}
                 className="flex h-9 w-full border border-input bg-background px-3 py-1 text-sm"
               >
                 {MODEL_OPTIONS.map((opt) => (
@@ -171,6 +190,45 @@ export function TrainingTab({ projectId }: { projectId: string }) {
 
             {computeMode === "hf_jobs" && (
               <>
+                {/* Hardware */}
+                <div>
+                  <Label className="flex items-center gap-1.5">
+                    <Cpu className="h-3.5 w-3.5" />
+                    Hardware
+                  </Label>
+                  <div className="grid grid-cols-1 gap-1.5 mt-1.5">
+                    {HF_FLAVOR_OPTIONS.map((opt) => {
+                      const isRecommended = RECOMMENDED_FLAVORS[baseModel] === opt.value;
+                      const isSelected = hfFlavor === opt.value;
+                      return (
+                        <button
+                          key={opt.value}
+                          type="button"
+                          onClick={() => setHfFlavor(opt.value)}
+                          className={`flex items-center justify-between border p-2.5 text-left text-sm transition-colors ${
+                            isSelected
+                              ? "border-ecole-orange bg-ecole-orange/5"
+                              : "border-input hover:border-muted-foreground"
+                          }`}
+                        >
+                          <div className="flex items-center gap-2">
+                            <span className="font-mono text-xs font-medium">{opt.label}</span>
+                            {isRecommended && (
+                              <span className="text-[10px] font-mono px-1.5 py-0.5 bg-ecole-orange/10 text-ecole-orange border border-ecole-orange/20">
+                                Recommended
+                              </span>
+                            )}
+                          </div>
+                          <div className="flex items-center gap-3 text-xs text-muted-foreground">
+                            <span>{opt.description}</span>
+                            <span className="font-mono">{opt.vram}</span>
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
                 <div>
                   <Label>Organization Namespace</Label>
                   <Input
@@ -183,8 +241,7 @@ export function TrainingTab({ projectId }: { projectId: string }) {
                   </p>
                 </div>
                 <p className="text-xs text-muted-foreground border border-border p-2">
-                  Requires HuggingFace Pro or Enterprise. Training will run on HF infrastructure
-                  ({baseModel.includes("8B") ? "A10G Large" : "A10G Small"} GPU). Configure your HF token in Settings.
+                  Requires HuggingFace Pro or Enterprise. Configure your HF token in Settings.
                 </p>
               </>
             )}

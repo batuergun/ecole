@@ -71,6 +71,13 @@ export const api = {
     }),
   deleteDatasetItem: (projectId: string, itemId: string) =>
     request(`/projects/${projectId}/dataset/${itemId}`, { method: "DELETE" }),
+  batchDeleteDatasetItems: (projectId: string, ids: string[]) =>
+    request<{ deleted: number }>(`/projects/${projectId}/dataset/batch-delete`, {
+      method: "POST",
+      body: JSON.stringify({ ids }),
+    }),
+  datasetStats: (projectId: string) =>
+    request<DatasetStats>(`/projects/${projectId}/dataset/stats`),
 
   // Training
   launchTraining: (projectId: string, data: LaunchTrainingInput) =>
@@ -176,6 +183,7 @@ export interface LaunchTrainingInput {
   lora_config?: Record<string, unknown>;
   training_config?: Record<string, unknown>;
   compute_mode?: string;
+  hf_flavor?: string;
   hf_namespace?: string;
 }
 
@@ -198,5 +206,15 @@ export interface Job {
   job_type: string;
   project_id: string;
   status: string;
+  error: string | null;
+  progress_data: Record<string, unknown>;
   created_at: string;
+  claimed_at: string | null;
+  completed_at: string | null;
+}
+
+export interface DatasetStats {
+  total: number;
+  train_count: number;
+  eval_count: number;
 }
