@@ -22,7 +22,7 @@ import os
 import sys
 
 import torch
-from datasets import Dataset
+from datasets import load_dataset
 from huggingface_hub import HfApi
 from peft import LoraConfig, TaskType
 from transformers import AutoConfig, AutoModelForCausalLM, AutoTokenizer
@@ -46,36 +46,28 @@ def _load_causal_model(model_name: str, dtype: torch.dtype, token: str):
 
 def main():
     # Read config from environment
-    dataset_json = os.environ.get("ECOLE_DATASET")
+    dataset_repo = os.environ.get("ECOLE_DATASET_REPO")
     base_model = os.environ.get("ECOLE_BASE_MODEL", "mistralai/Ministral-3-3B-Reasoning-2512")
     lora_config_json = os.environ.get("ECOLE_LORA_CONFIG", "{}")
     training_config_json = os.environ.get("ECOLE_TRAINING_CONFIG", "{}")
     output_repo = os.environ.get("ECOLE_OUTPUT_REPO", "")
     hf_token = os.environ.get("HF_TOKEN", "")
 
-    if not dataset_json:
-        print("ERROR: ECOLE_DATASET env var is required")
+    if not dataset_repo:
+        print("ERROR: ECOLE_DATASET_REPO env var is required")
         sys.exit(1)
 
     # Parse configs
-    train_items = json.loads(dataset_json)
     lora_cfg = json.loads(lora_config_json)
     training_cfg = json.loads(training_config_json)
 
     print(f"[ecole-hf-job] Base model: {base_model}")
-    print(f"[ecole-hf-job] Training examples: {len(train_items)}")
+    print(f"[ecole-hf-job] Loading dataset from {dataset_repo}")
     print(f"[ecole-hf-job] Output repo: {output_repo}")
 
-    # Format dataset as chat messages
-    formatted = []
-    for item in train_items:
-        formatted.append({
-            "messages": [
-                {"role": "user", "content": item["question"]},
-                {"role": "assistant", "content": item["answer"]},
-            ]
-        })
-    dataset = Dataset.from_list(formatted)
+    # Load dataset from HF Hub (already formatted as chat messages)
+    dataset = load_dataset(dataset_repo, split="train", token=hf_token)
+    print(f"[ecole-hf-job] Training examples: {len(dataset)}")
 
     # Training params
     num_epochs = training_cfg.get("num_train_epochs", 3)

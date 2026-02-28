@@ -141,6 +141,16 @@ def _run_hf_jobs(
 
     output_repo = f"{owner}/ecole-{project_name}-{model_short}"
 
+    # Push dataset to HF Hub as a proper dataset repo
+    from datasets import Dataset
+
+    formatted = _format_dataset(train_items)
+    dataset = Dataset.from_list(formatted)
+    dataset_repo = f"{owner}/ecole-{project_name}-dataset-{training_run_id[:8]}"
+    hf_api.create_repo(dataset_repo, repo_type="dataset", exist_ok=True, private=True)
+    dataset.push_to_hub(dataset_repo, token=hf_token, private=True)
+    print(f"[training:hf_jobs] Dataset pushed to {dataset_repo}")
+
     # Select GPU flavor — use explicit choice from run_info, fall back to model default
     flavor = run_info.get("hf_flavor") or DEFAULT_HF_FLAVORS.get(base_model, "a10g-small")
 
@@ -156,7 +166,7 @@ def _run_hf_jobs(
         flavor=flavor,
         timeout=timeout,
         env={
-            "ECOLE_DATASET": json.dumps(train_items),
+            "ECOLE_DATASET_REPO": dataset_repo,
             "ECOLE_BASE_MODEL": base_model,
             "ECOLE_LORA_CONFIG": json.dumps(lora_config_raw),
             "ECOLE_TRAINING_CONFIG": json.dumps(training_config_raw),
