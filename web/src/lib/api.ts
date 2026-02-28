@@ -95,8 +95,8 @@ export const api = {
     request<Benchmark[]>(`/projects/${projectId}/benchmark`),
 
   // Settings
-  getKeys: () => request<{ anthropic_key: string; hf_token: string }>("/settings/keys"),
-  updateKeys: (data: { anthropic_key?: string; hf_token?: string }) =>
+  getKeys: () => request<{ anthropic_key: string; mistral_key: string; hf_token: string }>("/settings/keys"),
+  updateKeys: (data: { anthropic_key?: string; mistral_key?: string; hf_token?: string }) =>
     request("/settings/keys", { method: "PUT", body: JSON.stringify(data) }),
 };
 

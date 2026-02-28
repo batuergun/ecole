@@ -44,6 +44,8 @@ services:
       context: ./worker
     environment:
       API_URL: http://api:8080
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      MISTRAL_API_KEY: ${MISTRAL_API_KEY:-}
     volumes:
       - model_cache:/root/.cache/huggingface
       - uploads:/data/uploads

@@ -101,6 +101,11 @@ export default function ProjectDetail() {
           <div className="flex items-center gap-3">
             <h2 className="text-2xl font-mono font-bold">{project.name}</h2>
             <Badge variant="outline">{statusLabels[project.status] || project.status}</Badge>
+            {project.context?.llm_provider && project.context.llm_provider !== "anthropic" && (
+              <Badge variant="secondary" className="text-xs">
+                {project.context.llm_provider === "mistral" ? "Mistral" : project.context.llm_provider}
+              </Badge>
+            )}
           </div>
           <Button
             variant="ghost"

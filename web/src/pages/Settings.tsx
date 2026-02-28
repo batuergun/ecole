@@ -10,6 +10,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 export default function Settings() {
   const queryClient = useQueryClient();
   const [anthropicKey, setAnthropicKey] = useState("");
+  const [mistralKey, setMistralKey] = useState("");
   const [hfToken, setHfToken] = useState("");
 
   const { isLoading } = useQuery({
@@ -17,6 +18,7 @@ export default function Settings() {
     queryFn: async () => {
       const keys = await api.getKeys();
       if (keys.anthropic_key) setAnthropicKey(keys.anthropic_key);
+      if (keys.mistral_key) setMistralKey(keys.mistral_key);
       if (keys.hf_token) setHfToken(keys.hf_token);
       return keys;
     },
@@ -24,10 +26,13 @@ export default function Settings() {
 
   const mutation = useMutation({
     mutationFn: () => {
-      const data: { anthropic_key?: string; hf_token?: string } = {};
+      const data: { anthropic_key?: string; mistral_key?: string; hf_token?: string } = {};
       // Only send keys that don't look masked
       if (anthropicKey && !anthropicKey.startsWith("****")) {
         data.anthropic_key = anthropicKey;
+      }
+      if (mistralKey && !mistralKey.startsWith("****")) {
+        data.mistral_key = mistralKey;
       }
       if (hfToken && !hfToken.startsWith("****")) {
         data.hf_token = hfToken;
@@ -79,6 +84,19 @@ export default function Settings() {
                   />
                   <p className="mt-1 text-xs text-muted-foreground">
                     Used for auto-harness (Q&A generation) and auto-benchmark
+                  </p>
+                </div>
+                <div>
+                  <Label htmlFor="mistral">Mistral API Key</Label>
+                  <Input
+                    id="mistral"
+                    type="password"
+                    value={mistralKey}
+                    onChange={(e) => setMistralKey(e.target.value)}
+                    placeholder="..."
+                  />
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    Alternative to Anthropic for Q&A generation and benchmarking
                   </p>
                 </div>
                 <div>

@@ -214,6 +214,13 @@ func (h *WorkerHandler) GetAPIKeys(c *gin.Context) {
 		}
 	}
 
+	mistralEnc, err := h.store.GetMistralKey(c.Request.Context(), userID)
+	if err == nil && len(mistralEnc) > 0 {
+		if dec, err := crypto.Decrypt(mistralEnc, h.cfg.EncryptionKey); err == nil {
+			result["mistral_key"] = string(dec)
+		}
+	}
+
 	hfEnc, err := h.store.GetHFToken(c.Request.Context(), userID)
 	if err == nil && len(hfEnc) > 0 {
 		if dec, err := crypto.Decrypt(hfEnc, h.cfg.EncryptionKey); err == nil {

@@ -1,13 +1,12 @@
-"""Auto-harness: extract data from uploads and generate Q&A pairs using Claude."""
+"""Auto-harness: extract data from uploads and generate Q&A pairs using an LLM."""
 
 import json
 import os
 import random
 import tempfile
 
-import anthropic
-
 from worker.client import APIClient
+from worker.llm import LLMClient, create_llm_client
 from worker.pdf.extract import extract_pdf_pages, chunk_text
 
 
@@ -54,16 +53,26 @@ def run(client: APIClient, job: dict) -> None:
     project = client.get_project(project_id)
     keys = client.get_api_keys(project_id)
 
-    anthropic_key = keys.get("anthropic_key") or os.getenv("ANTHROPIC_API_KEY", "")
-    if not anthropic_key:
-        raise ValueError("No Anthropic API key configured. Set it in Settings or ANTHROPIC_API_KEY env var.")
-
-    claude = anthropic.Anthropic(api_key=anthropic_key)
-
-    # Build context section from project settings
+    # Read LLM provider from project context (default: anthropic)
     context = project.get("context", {})
     if isinstance(context, str):
         context = json.loads(context) if context else {}
+
+    provider = context.get("llm_provider", "anthropic")
+
+    # Fall back to env vars if keys not set in DB
+    if provider == "anthropic" and not keys.get("anthropic_key"):
+        env_key = os.getenv("ANTHROPIC_API_KEY", "")
+        if env_key:
+            keys["anthropic_key"] = env_key
+    if provider == "mistral" and not keys.get("mistral_key"):
+        env_key = os.getenv("MISTRAL_API_KEY", "")
+        if env_key:
+            keys["mistral_key"] = env_key
+
+    llm = create_llm_client(provider, keys)
+
+    print(f"[harness] Using LLM provider: {provider}")
 
     context_section = _build_context_section(context)
 
@@ -86,9 +95,9 @@ def run(client: APIClient, job: dict) -> None:
             mime = upload.get("mime_type", "")
 
             if mime == "application/pdf" or upload["filename"].lower().endswith(".pdf"):
-                chunks = _process_pdf(client, claude, upload, local_path, context_section, context)
+                chunks = _process_pdf(client, llm, upload, local_path, context_section, context)
             else:
-                chunks = _process_text(client, claude, upload, local_path, context_section, context)
+                chunks = _process_text(client, llm, upload, local_path, context_section, context)
 
             total_chunks += len(chunks)
             all_qa_items.extend(chunks)
@@ -139,7 +148,7 @@ def _build_context_section(context: dict) -> str:
 
 def _process_pdf(
     client: APIClient,
-    claude: anthropic.Anthropic,
+    llm: LLMClient,
     upload: dict,
     local_path: str,
     context_section: str,
@@ -161,7 +170,7 @@ def _process_pdf(
             metadata={"page": page_data["page"], "source": upload["filename"]},
         )
 
-        # Generate Q&A using Claude with vision (page image)
+        # Generate Q&A using LLM with vision (page image)
         format_instructions = ""
         if context.get("response_format"):
             format_instructions = f"- Answers should follow this format: {context['response_format']}"
@@ -189,7 +198,7 @@ def _process_pdf(
         )
         content_blocks.append({"type": "text", "text": prompt_text})
 
-        qa_pairs = _call_claude(claude, content_blocks)
+        qa_pairs = _call_llm(llm, content_blocks, use_vision=True)
 
         for qa in qa_pairs:
             all_items.append({
@@ -203,7 +212,7 @@ def _process_pdf(
 
 def _process_text(
     client: APIClient,
-    claude: anthropic.Anthropic,
+    llm: LLMClient,
     upload: dict,
     local_path: str,
     context_section: str,
@@ -242,7 +251,7 @@ def _process_text(
         )
 
         content_blocks = [{"type": "text", "text": prompt_text}]
-        qa_pairs = _call_claude(claude, content_blocks)
+        qa_pairs = _call_llm(llm, content_blocks, use_vision=False)
 
         for qa in qa_pairs:
             all_items.append({
@@ -254,17 +263,17 @@ def _process_text(
     return all_items
 
 
-def _call_claude(claude: anthropic.Anthropic, content_blocks: list[dict]) -> list[dict]:
-    """Call Claude to generate Q&A pairs. Returns parsed list of {question, answer} dicts."""
+def _call_llm(llm: LLMClient, content_blocks: list[dict], use_vision: bool = False) -> list[dict]:
+    """Call LLM to generate Q&A pairs. Returns parsed list of {question, answer} dicts."""
     try:
-        response = claude.messages.create(
-            model="claude-sonnet-4-20250514",
-            max_tokens=4096,
+        response = llm.generate(
             system=SYSTEM_PROMPT,
-            messages=[{"role": "user", "content": content_blocks}],
+            content_blocks=content_blocks,
+            max_tokens=4096,
+            use_vision=use_vision,
         )
 
-        response_text = response.content[0].text
+        response_text = response.text
 
         # Extract JSON from response (handle markdown code blocks)
         if "```json" in response_text:
@@ -285,8 +294,8 @@ def _call_claude(claude: anthropic.Anthropic, content_blocks: list[dict]) -> lis
         return validated
 
     except (json.JSONDecodeError, IndexError, KeyError) as e:
-        print(f"[harness] Failed to parse Claude response: {e}")
+        print(f"[harness] Failed to parse LLM response: {e}")
         return []
-    except anthropic.APIError as e:
-        print(f"[harness] Claude API error: {e}")
+    except Exception as e:
+        print(f"[harness] LLM API error: {e}")
         return []

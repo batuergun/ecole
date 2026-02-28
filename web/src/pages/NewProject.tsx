@@ -8,6 +8,13 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 export default function NewProject() {
   const navigate = useNavigate();
@@ -18,6 +25,7 @@ export default function NewProject() {
   const [purpose, setPurpose] = useState("");
   const [responseFormat, setResponseFormat] = useState("");
   const [selfAwareness, setSelfAwareness] = useState("");
+  const [llmProvider, setLlmProvider] = useState("anthropic");
 
   const mutation = useMutation({
     mutationFn: () =>
@@ -28,6 +36,7 @@ export default function NewProject() {
           purpose,
           response_format: responseFormat,
           self_awareness: selfAwareness,
+          llm_provider: llmProvider,
         },
       }),
     onSuccess: (project) => {
@@ -88,6 +97,21 @@ export default function NewProject() {
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
+            <div>
+              <Label htmlFor="llm-provider">LLM Provider</Label>
+              <Select value={llmProvider} onValueChange={setLlmProvider}>
+                <SelectTrigger id="llm-provider">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="anthropic">Anthropic (Claude)</SelectItem>
+                  <SelectItem value="mistral">Mistral</SelectItem>
+                </SelectContent>
+              </Select>
+              <p className="mt-1 text-xs text-muted-foreground">
+                Used for Q&A generation and LLM-as-judge benchmarking
+              </p>
+            </div>
             <div>
               <Label htmlFor="purpose">Model Purpose</Label>
               <Textarea

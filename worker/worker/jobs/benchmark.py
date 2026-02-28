@@ -3,12 +3,12 @@
 import json
 import os
 
-import anthropic
 import torch
 from peft import PeftModel
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
 from worker.client import APIClient
+from worker.llm import LLMClient, create_llm_client
 
 
 OUTPUT_DIR = os.environ.get("ECOLE_MODEL_DIR", "/tmp/ecole_models")
@@ -45,13 +45,30 @@ def run(client: APIClient, job: dict) -> None:
 
     print(f"[benchmark] Starting for project {project_id}, run {training_run_id}")
 
-    # Get API keys
+    # Get project context and API keys
+    project = client.get_project(project_id)
     keys = client.get_api_keys(project_id)
-    anthropic_key = keys.get("anthropic_key") or os.getenv("ANTHROPIC_API_KEY", "")
-    if not anthropic_key:
-        raise ValueError("No Anthropic API key configured.")
 
-    claude = anthropic.Anthropic(api_key=anthropic_key)
+    # Read LLM provider from project context (default: anthropic)
+    context = project.get("context", {})
+    if isinstance(context, str):
+        context = json.loads(context) if context else {}
+
+    provider = context.get("llm_provider", "anthropic")
+
+    # Fall back to env vars if keys not set in DB
+    if provider == "anthropic" and not keys.get("anthropic_key"):
+        env_key = os.getenv("ANTHROPIC_API_KEY", "")
+        if env_key:
+            keys["anthropic_key"] = env_key
+    if provider == "mistral" and not keys.get("mistral_key"):
+        env_key = os.getenv("MISTRAL_API_KEY", "")
+        if env_key:
+            keys["mistral_key"] = env_key
+
+    llm = create_llm_client(provider, keys)
+
+    print(f"[benchmark] Using LLM provider: {provider}")
 
     # Get training run info
     run_info = client.get_training_run(training_run_id)
@@ -74,7 +91,7 @@ def run(client: APIClient, job: dict) -> None:
     )
 
     base_results = _evaluate_model(
-        claude=claude,
+        llm=llm,
         model_name=base_model,
         adapter_path=None,
         eval_items=eval_items,
@@ -95,7 +112,7 @@ def run(client: APIClient, job: dict) -> None:
         )
 
         ft_results = _evaluate_model(
-            claude=claude,
+            llm=llm,
             model_name=base_model,
             adapter_path=adapter_path,
             eval_items=eval_items,
@@ -114,7 +131,7 @@ def run(client: APIClient, job: dict) -> None:
 
 
 def _evaluate_model(
-    claude: anthropic.Anthropic,
+    llm: LLMClient,
     model_name: str,
     adapter_path: str | None,
     eval_items: list[dict],
@@ -122,7 +139,7 @@ def _evaluate_model(
     job_id: str,
     label: str,
 ) -> list[dict]:
-    """Load a model, generate answers for eval items, and score with Claude."""
+    """Load a model, generate answers for eval items, and score with the LLM judge."""
     # Load tokenizer
     tokenizer = AutoTokenizer.from_pretrained(model_name)
     if tokenizer.pad_token is None:
@@ -149,8 +166,8 @@ def _evaluate_model(
         # Generate answer
         answer = _generate_answer(model, tokenizer, question)
 
-        # Score with Claude
-        score_data = _judge_answer(claude, question, expected, answer)
+        # Score with LLM judge
+        score_data = _judge_answer(llm, question, expected, answer)
 
         results.append({
             "question": question,
@@ -203,24 +220,26 @@ def _generate_answer(model, tokenizer, question: str, max_new_tokens: int = 512)
     return tokenizer.decode(generated, skip_special_tokens=True).strip()
 
 
-def _judge_answer(claude: anthropic.Anthropic, question: str, expected: str, answer: str) -> dict:
-    """Use Claude as a judge to score the answer."""
+def _judge_answer(llm: LLMClient, question: str, expected: str, answer: str) -> dict:
+    """Use LLM as a judge to score the answer."""
     try:
-        response = claude.messages.create(
-            model="claude-sonnet-4-20250514",
-            max_tokens=256,
+        content_blocks = [{
+            "type": "text",
+            "text": JUDGE_PROMPT.format(
+                question=question,
+                expected=expected,
+                answer=answer,
+            ),
+        }]
+
+        response = llm.generate(
             system=JUDGE_SYSTEM,
-            messages=[{
-                "role": "user",
-                "content": JUDGE_PROMPT.format(
-                    question=question,
-                    expected=expected,
-                    answer=answer,
-                ),
-            }],
+            content_blocks=content_blocks,
+            max_tokens=256,
+            use_vision=False,
         )
 
-        text = response.content[0].text.strip()
+        text = response.text.strip()
 
         # Extract JSON
         if "```json" in text:
@@ -234,7 +253,10 @@ def _judge_answer(claude: anthropic.Anthropic, question: str, expected: str, ans
             score = 0
         return {"score": score, "reason": result.get("reason", "")}
 
-    except (json.JSONDecodeError, IndexError, KeyError, anthropic.APIError) as e:
+    except (json.JSONDecodeError, IndexError, KeyError) as e:
+        print(f"[benchmark] Judge error: {e}")
+        return {"score": 0, "reason": f"Judging failed: {e}"}
+    except Exception as e:
         print(f"[benchmark] Judge error: {e}")
         return {"score": 0, "reason": f"Judging failed: {e}"}
 

@@ -23,12 +23,20 @@ func (h *SettingsHandler) GetKeys(c *gin.Context) {
 	userID := middleware.GetUserID(c)
 
 	anthropicEnc, _ := h.store.GetAnthropicKey(c.Request.Context(), userID)
+	mistralEnc, _ := h.store.GetMistralKey(c.Request.Context(), userID)
 	hfEnc, _ := h.store.GetHFToken(c.Request.Context(), userID)
 
 	anthropicMasked := ""
 	if len(anthropicEnc) > 0 {
 		if dec, err := crypto.Decrypt(anthropicEnc, h.cfg.EncryptionKey); err == nil && len(dec) > 4 {
 			anthropicMasked = "****" + string(dec[len(dec)-4:])
+		}
+	}
+
+	mistralMasked := ""
+	if len(mistralEnc) > 0 {
+		if dec, err := crypto.Decrypt(mistralEnc, h.cfg.EncryptionKey); err == nil && len(dec) > 4 {
+			mistralMasked = "****" + string(dec[len(dec)-4:])
 		}
 	}
 
@@ -41,12 +49,14 @@ func (h *SettingsHandler) GetKeys(c *gin.Context) {
 
 	c.JSON(http.StatusOK, gin.H{
 		"anthropic_key": anthropicMasked,
+		"mistral_key":   mistralMasked,
 		"hf_token":      hfMasked,
 	})
 }
 
 type updateKeysRequest struct {
 	AnthropicKey string `json:"anthropic_key"`
+	MistralKey   string `json:"mistral_key"`
 	HFToken      string `json:"hf_token"`
 }
 
@@ -66,6 +76,18 @@ func (h *SettingsHandler) UpdateKeys(c *gin.Context) {
 			return
 		}
 		if err := h.store.SetAnthropicKey(c.Request.Context(), userID, enc); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to save key"})
+			return
+		}
+	}
+
+	if req.MistralKey != "" {
+		enc, err := crypto.Encrypt([]byte(req.MistralKey), h.cfg.EncryptionKey)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to encrypt key"})
+			return
+		}
+		if err := h.store.SetMistralKey(c.Request.Context(), userID, enc); err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to save key"})
 			return
 		}

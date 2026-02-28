@@ -11,6 +11,7 @@ type User struct {
 	Email            string    `json:"email" db:"email"`
 	Name             string    `json:"name" db:"name"`
 	AnthropicKeyEnc  []byte    `json:"-" db:"anthropic_api_key_enc"`
+	MistralKeyEnc    []byte    `json:"-" db:"mistral_api_key_enc"`
 	HFTokenEnc       []byte    `json:"-" db:"hf_api_token_enc"`
 	CreatedAt        time.Time `json:"created_at" db:"created_at"`
 	UpdatedAt        time.Time `json:"updated_at" db:"updated_at"`
