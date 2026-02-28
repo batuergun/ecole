@@ -171,3 +171,27 @@ func (h *TrainingHandler) Get(c *gin.Context) {
 	}
 	c.JSON(http.StatusOK, run)
 }
+
+func (h *TrainingHandler) GetLogs(c *gin.Context) {
+	userID := middleware.GetUserID(c)
+	projectID := c.Param("id")
+	tid := c.Param("tid")
+
+	if _, err := h.store.GetProject(c.Request.Context(), projectID, userID); err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "project not found"})
+		return
+	}
+
+	// Verify the training run belongs to this project
+	if _, err := h.store.GetTrainingRun(c.Request.Context(), tid, projectID); err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "training run not found"})
+		return
+	}
+
+	logs, err := h.store.GetTrainingLogs(c.Request.Context(), tid)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to get logs"})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"logs": logs})
+}

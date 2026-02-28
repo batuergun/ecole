@@ -28,6 +28,7 @@ func New(cfg *config.Config, s *store.Store, st *storage.Storage, q *queue.Queue
 	trainingH := handler.NewTrainingHandler(s, q)
 	benchmarkH := handler.NewBenchmarkHandler(s, q)
 	workerH := handler.NewWorkerHandler(s, q, st, cfg)
+	activityH := handler.NewActivityHandler(s)
 	settingsH := handler.NewSettingsHandler(s, cfg)
 
 	// Auth routes (no auth middleware)
@@ -42,6 +43,9 @@ func New(cfg *config.Config, s *store.Store, st *storage.Storage, q *queue.Queue
 	// Protected routes
 	api := r.Group("/api", middleware.Auth(cfg, s))
 	{
+		// Activity (all jobs across projects)
+		api.GET("/activity", activityH.List)
+
 		// Settings
 		api.GET("/settings/keys", settingsH.GetKeys)
 		api.PUT("/settings/keys", settingsH.UpdateKeys)
@@ -74,6 +78,7 @@ func New(cfg *config.Config, s *store.Store, st *storage.Storage, q *queue.Queue
 		api.GET("/projects/:id/training", trainingH.List)
 		api.GET("/projects/:id/training/:tid", trainingH.Get)
 		api.DELETE("/projects/:id/training/:tid", trainingH.Delete)
+		api.GET("/projects/:id/training/:tid/logs", trainingH.GetLogs)
 		api.POST("/projects/:id/training/:tid/upload-hf", trainingH.UploadHF)
 
 		// Benchmark
@@ -103,7 +108,9 @@ func New(cfg *config.Config, s *store.Store, st *storage.Storage, q *queue.Queue
 		worker.PATCH("/training-runs/:tid/progress", workerH.UpdateTrainingProgress)
 		worker.POST("/training-runs/:tid/complete", workerH.CompleteTrainingRun)
 		worker.POST("/training-runs/:tid/fail", workerH.FailTrainingRun)
+		worker.POST("/training-runs/:tid/hf-job", workerH.SetHFJobID)
 		worker.POST("/training-runs/:tid/hf-repo", workerH.SetTrainingHFRepo)
+		worker.PUT("/training-runs/:tid/logs", workerH.UpdateTrainingLogs)
 
 		// Benchmark operations
 		worker.POST("/benchmarks", workerH.CreateBenchmarkRecord)

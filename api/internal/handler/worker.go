@@ -248,9 +248,13 @@ func (h *WorkerHandler) GetTrainingRun(c *gin.Context) {
 func (h *WorkerHandler) UpdateTrainingProgress(c *gin.Context) {
 	tid := c.Param("tid")
 	var req struct {
-		Status string   `json:"status"`
-		Epoch  int      `json:"epoch"`
-		Loss   *float64 `json:"loss"`
+		Status       string   `json:"status"`
+		Epoch        int      `json:"epoch"`
+		Loss         *float64 `json:"loss"`
+		CurrentStep  int      `json:"current_step"`
+		TotalSteps   *int     `json:"total_steps"`
+		GradNorm     *float64 `json:"grad_norm"`
+		LearningRate *float64 `json:"learning_rate"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
@@ -259,8 +263,25 @@ func (h *WorkerHandler) UpdateTrainingProgress(c *gin.Context) {
 	if req.Status == "" {
 		req.Status = "training"
 	}
-	if err := h.store.UpdateTrainingProgress(c.Request.Context(), tid, req.Status, req.Epoch, req.Loss); err != nil {
+	if err := h.store.UpdateTrainingProgress(c.Request.Context(), tid, req.Status, req.Epoch, req.Loss, req.CurrentStep, req.TotalSteps, req.GradNorm, req.LearningRate); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update progress"})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"ok": true})
+}
+
+// UpdateTrainingLogs lets the worker update training run logs.
+func (h *WorkerHandler) UpdateTrainingLogs(c *gin.Context) {
+	tid := c.Param("tid")
+	var req struct {
+		Logs string `json:"logs"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	if err := h.store.UpdateTrainingLogs(c.Request.Context(), tid, req.Logs); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update logs"})
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"ok": true})
@@ -295,6 +316,23 @@ func (h *WorkerHandler) FailTrainingRun(c *gin.Context) {
 	}
 	if err := h.store.FailTrainingRun(c.Request.Context(), tid, req.Error); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to fail training run"})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"ok": true})
+}
+
+// SetHFJobID stores the HuggingFace job URL on a training run.
+func (h *WorkerHandler) SetHFJobID(c *gin.Context) {
+	tid := c.Param("tid")
+	var req struct {
+		JobID string `json:"job_id" binding:"required"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	if err := h.store.SetHFJobID(c.Request.Context(), tid, req.JobID); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to set HF job ID"})
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"ok": true})
