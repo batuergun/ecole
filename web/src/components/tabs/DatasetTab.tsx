@@ -1,7 +1,7 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { api, type DatasetItem, type Job, type DatasetStats } from "@/lib/api";
+import { api, type DatasetItem } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -41,6 +41,70 @@ function formatDuration(start: string, end?: string | null): string {
   const minutes = Math.floor(seconds / 60);
   const remaining = seconds % 60;
   return `${minutes}m ${remaining}s`;
+}
+
+function QAStream({ projectId }: { projectId: string }) {
+  const [visible, setVisible] = useState<DatasetItem | null>(null);
+  const [fading, setFading] = useState(false);
+  const seenRef = useRef<Set<string>>(new Set());
+  const queueRef = useRef<DatasetItem[]>([]);
+  const timerRef = useRef<ReturnType<typeof setTimeout>>();
+
+  const { data } = useQuery({
+    queryKey: ["dataset-stream", projectId],
+    queryFn: () => api.listDataset(projectId, 50, 0),
+    refetchInterval: 3000,
+  });
+
+  useEffect(() => {
+    if (!data?.items) return;
+    for (const item of data.items) {
+      if (!seenRef.current.has(item.id)) {
+        seenRef.current.add(item.id);
+        queueRef.current.push(item);
+      }
+    }
+  }, [data]);
+
+  useEffect(() => {
+    const cycle = () => {
+      const items = data?.items || [];
+      if (items.length === 0) return;
+
+      // Pick from queue of unseen items first, otherwise random
+      const next = queueRef.current.shift() || items[Math.floor(Math.random() * items.length)];
+
+      setFading(false);
+      setVisible(next);
+
+      // Fade out after 2.5s
+      timerRef.current = setTimeout(() => {
+        setFading(true);
+        // Swap after fade completes
+        timerRef.current = setTimeout(cycle, 600);
+      }, 2500);
+    };
+
+    cycle();
+    return () => clearTimeout(timerRef.current);
+  }, [data]);
+
+  if (!visible) return null;
+
+  return (
+    <div
+      className={`transition-opacity duration-500 ${fading ? "opacity-0" : "opacity-100"}`}
+    >
+      <div className="border-l-2 border-ecole-orange/40 pl-3 py-1 space-y-1">
+        <p className="text-xs text-muted-foreground font-mono truncate">
+          Q: {visible.question}
+        </p>
+        <p className="text-xs text-muted-foreground/70 font-mono truncate">
+          A: {visible.answer}
+        </p>
+      </div>
+    </div>
+  );
 }
 
 function GenerationProgress({
@@ -124,19 +188,24 @@ function GenerationProgress({
       {isRunning && (
         <>
           <div className="h-1.5 w-full bg-muted overflow-hidden">
-            <div
-              className="h-full bg-ecole-orange transition-all duration-500"
-              style={{ width: `${pct}%` }}
-            />
+            {totalFiles > 0 ? (
+              <div
+                className="h-full bg-ecole-orange transition-all duration-500"
+                style={{ width: `${pct}%` }}
+              />
+            ) : (
+              <div className="h-full bg-ecole-orange animate-pulse w-full opacity-30" />
+            )}
           </div>
           <div className="flex justify-between text-xs text-muted-foreground font-mono">
             <span>
               {totalFiles > 0
                 ? `${processedFiles} / ${totalFiles} files`
-                : "Starting..."}
+                : "Processing files..."}
             </span>
-            <span>{totalQaPairs > 0 && `${totalQaPairs} Q&A pairs`}</span>
+            <span>{totalQaPairs > 0 ? `${totalQaPairs} Q&A pairs` : "Extracting Q&A pairs..."}</span>
           </div>
+          <QAStream projectId={projectId} />
         </>
       )}
     </div>
