@@ -4,6 +4,7 @@ import traceback
 from worker.config import Config
 from worker.client import APIClient
 from worker.jobs import harness, training, benchmark
+from worker.hf import upload as hf_upload
 
 
 def main():
@@ -35,6 +36,8 @@ def main():
                 training.run(client, job)
             elif job_type == "benchmark":
                 benchmark.run(client, job)
+            elif job_type == "hf_upload":
+                hf_upload.run(client, job)
             else:
                 raise ValueError(f"Unknown job type: {job_type}")
 
