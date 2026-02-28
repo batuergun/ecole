@@ -126,7 +126,7 @@ CREATE INDEX idx_benchmarks_training ON benchmarks(training_run_id);
 CREATE TABLE jobs (
     id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     job_type      TEXT NOT NULL CHECK (job_type IN ('harness','training','benchmark')),
-    project_id    UUID NOT NULL REFERENCES projects(id),
+    project_id    UUID NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
     payload       JSONB NOT NULL DEFAULT '{}',
     status        TEXT NOT NULL DEFAULT 'pending'
                   CHECK (status IN ('pending','claimed','running','completed','failed')),
