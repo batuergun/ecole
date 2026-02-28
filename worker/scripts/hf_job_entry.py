@@ -32,7 +32,7 @@ from trl import SFTConfig, SFTTrainer
 def main():
     # Read config from environment
     dataset_json = os.environ.get("ECOLE_DATASET")
-    base_model = os.environ.get("ECOLE_BASE_MODEL", "mistralai/Ministral-3b-instruct")
+    base_model = os.environ.get("ECOLE_BASE_MODEL", "mistralai/Ministral-3-3B-Reasoning-2512")
     lora_config_json = os.environ.get("ECOLE_LORA_CONFIG", "{}")
     training_config_json = os.environ.get("ECOLE_TRAINING_CONFIG", "{}")
     output_repo = os.environ.get("ECOLE_OUTPUT_REPO", "")

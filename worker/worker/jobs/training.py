@@ -14,10 +14,10 @@ HF_JOB_ENTRY_SCRIPT = os.path.join(
     "hf_job_entry.py",
 )
 
-# GPU flavor mapping for HF Jobs
-HF_JOB_FLAVORS = {
-    "mistralai/Ministral-3b-instruct": "a10g-small",
-    "mistralai/Ministral-8B-Instruct-2410": "a10g-large",
+# Default GPU flavor mapping (used as fallback when no flavor is specified)
+DEFAULT_HF_FLAVORS = {
+    "mistralai/Ministral-3-3B-Reasoning-2512": "a10g-small",
+    "mistralai/Ministral-3-8B-Reasoning-2512": "a10g-large",
 }
 
 
@@ -98,8 +98,8 @@ def _run_hf_jobs(
 
     output_repo = f"{owner}/ecole-{project_name}-{model_short}"
 
-    # Select GPU flavor
-    flavor = HF_JOB_FLAVORS.get(base_model, "a10g-small")
+    # Select GPU flavor — use explicit choice from run_info, fall back to model default
+    flavor = run_info.get("hf_flavor") or DEFAULT_HF_FLAVORS.get(base_model, "a10g-small")
 
     # Estimate timeout based on dataset size and epochs
     num_epochs = training_config_raw.get("num_train_epochs", 3)
@@ -135,10 +135,24 @@ def _run_hf_jobs(
 
     # Poll for completion
     poll_interval = 30  # seconds
+    max_poll_failures = 5  # consecutive failures before giving up
+    consecutive_failures = 0
+
     while True:
         time.sleep(poll_interval)
 
-        job_info = inspect_job(hf_job_id, token=hf_token)
+        try:
+            job_info = inspect_job(hf_job_id, token=hf_token)
+            consecutive_failures = 0
+        except Exception as e:
+            consecutive_failures += 1
+            print(f"[training:hf_jobs] Failed to inspect job {hf_job_id} ({consecutive_failures}/{max_poll_failures}): {e}")
+            if consecutive_failures >= max_poll_failures:
+                error_msg = f"Lost contact with HF Job {hf_job_id} after {max_poll_failures} poll failures: {e}"
+                client.fail_training_run(training_run_id, error_msg)
+                raise RuntimeError(error_msg)
+            continue
+
         stage = job_info.status.stage
 
         print(f"[training:hf_jobs] Job {hf_job_id} status: {stage}")

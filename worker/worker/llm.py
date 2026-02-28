@@ -8,7 +8,7 @@ import anthropic
 from mistralai import Mistral
 
 
-ANTHROPIC_MODEL = "claude-sonnet-4-6-20250220"
+ANTHROPIC_MODEL = "claude-sonnet-4-6"
 MISTRAL_TEXT_MODEL = "mistral-large-latest"
 MISTRAL_VISION_MODEL = "pixtral-large-latest"
 

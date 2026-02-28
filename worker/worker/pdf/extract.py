@@ -3,6 +3,9 @@
 import base64
 import fitz  # PyMuPDF
 
+# Suppress noisy MuPDF warnings (e.g. "No common ancestor in structure tree")
+fitz.TOOLS.mupdf_display_errors(False)
+
 
 def extract_pdf_pages(pdf_path: str) -> list[dict]:
     """Extract text and page images from a PDF.
@@ -14,18 +17,21 @@ def extract_pdf_pages(pdf_path: str) -> list[dict]:
     pages = []
 
     for i, page in enumerate(doc):
-        text = page.get_text()
+        try:
+            text = page.get_text()
 
-        # Render page as image for VLM
-        pix = page.get_pixmap(dpi=150)
-        img_bytes = pix.tobytes("png")
-        img_b64 = base64.b64encode(img_bytes).decode("utf-8")
+            # Render page as image for VLM
+            pix = page.get_pixmap(dpi=150)
+            img_bytes = pix.tobytes("png")
+            img_b64 = base64.b64encode(img_bytes).decode("utf-8")
 
-        pages.append({
-            "page": i,
-            "text": text.strip(),
-            "image_base64": img_b64,
-        })
+            pages.append({
+                "page": i,
+                "text": text.strip(),
+                "image_base64": img_b64,
+            })
+        except Exception as e:
+            print(f"[pdf] Skipping page {i}: {e}")
 
     doc.close()
     return pages
@@ -42,8 +48,26 @@ def chunk_text(text: str, chunk_size: int = 3000, overlap: int = 300) -> list[st
     Returns:
         List of text chunks.
     """
+    return [c for c, _, _ in _chunk_impl(text, chunk_size, overlap)]
+
+
+def chunk_text_with_positions(
+    text: str, chunk_size: int = 3000, overlap: int = 300
+) -> list[tuple[str, int, int]]:
+    """Split text into overlapping chunks, returning positions.
+
+    Returns:
+        List of (chunk_text, start_offset, end_offset) tuples.
+    """
+    return _chunk_impl(text, chunk_size, overlap)
+
+
+def _chunk_impl(
+    text: str, chunk_size: int, overlap: int
+) -> list[tuple[str, int, int]]:
+    """Core chunking logic. Returns (text, start, end) tuples."""
     if len(text) <= chunk_size:
-        return [text] if text.strip() else []
+        return [(text, 0, len(text))] if text.strip() else []
 
     chunks = []
     start = 0
@@ -64,9 +88,10 @@ def chunk_text(text: str, chunk_size: int = 3000, overlap: int = 300) -> list[st
                         end = sent_break + len(sep)
                         break
 
-        chunk = text[start:end].strip()
+        actual_end = min(end, len(text))
+        chunk = text[start:actual_end].strip()
         if chunk:
-            chunks.append(chunk)
+            chunks.append((chunk, start, actual_end))
 
         start = end - overlap if end < len(text) else end
 

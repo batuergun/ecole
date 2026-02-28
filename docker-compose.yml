@@ -42,10 +42,12 @@ services:
   worker:
     build:
       context: ./worker
+    env_file:
+      - path: .env
+        required: false
     environment:
       API_URL: http://api:8080
-      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
-      MISTRAL_API_KEY: ${MISTRAL_API_KEY:-}
+      PYTHONUNBUFFERED: "1"
     volumes:
       - model_cache:/root/.cache/huggingface
       - uploads:/data/uploads

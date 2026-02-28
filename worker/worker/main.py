@@ -29,6 +29,13 @@ def main():
         job_type = job["job_type"]
         print(f"Claimed job {job_id} | type={job_type}")
 
+        payload = job.get("payload", {})
+        if isinstance(payload, str):
+            import json
+            payload = json.loads(payload)
+
+        project_id = job.get("project_id", "") or payload.get("project_id", "")
+
         try:
             if job_type == "harness":
                 harness.run(client, job)
@@ -46,6 +53,17 @@ def main():
         except Exception as e:
             traceback.print_exc()
             client.fail_job(job_id, str(e))
+            if project_id and job_type == "harness":
+                client.update_project_status(project_id, "created")
+            elif project_id and job_type == "training":
+                # Ensure training run is marked failed so it doesn't stay stuck
+                try:
+                    training_run_id = payload.get("training_run_id", "")
+                    if training_run_id:
+                        client.fail_training_run(training_run_id, str(e))
+                        client.update_project_status(project_id, "created")
+                except Exception:
+                    print(f"Failed to mark training run as failed")
             print(f"Failed job {job_id}: {e}")
 
 
