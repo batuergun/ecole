@@ -7,11 +7,16 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { Play, Upload, BarChart3 } from "lucide-react";
+import { Play, Upload, BarChart3, Cloud, Monitor } from "lucide-react";
 
 const MODEL_OPTIONS = [
   { value: "mistralai/Ministral-3b-instruct", label: "Ministral 3B (Fast)" },
   { value: "mistralai/Ministral-8B-Instruct-2410", label: "Ministral 8B (Quality)" },
+];
+
+const COMPUTE_OPTIONS = [
+  { value: "local", label: "Local GPU", icon: Monitor, description: "Train on your own GPU" },
+  { value: "hf_jobs", label: "HF Jobs", icon: Cloud, description: "Train on HuggingFace infrastructure" },
 ];
 
 export function TrainingTab({ projectId }: { projectId: string }) {
@@ -21,6 +26,7 @@ export function TrainingTab({ projectId }: { projectId: string }) {
   const [lr, setLr] = useState("0.0001");
   const [batchSize, setBatchSize] = useState("4");
   const [loraR, setLoraR] = useState("16");
+  const [computeMode, setComputeMode] = useState("local");
 
   const { data: runs } = useQuery({
     queryKey: ["training-runs", projectId],
@@ -48,11 +54,15 @@ export function TrainingTab({ projectId }: { projectId: string }) {
           logging_steps: 10,
           bf16: true,
         },
-        compute_mode: "local",
+        compute_mode: computeMode,
       }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["training-runs", projectId] });
-      toast.success("Training started");
+      toast.success(
+        computeMode === "hf_jobs"
+          ? "Training dispatched to HF Jobs"
+          : "Training started"
+      );
     },
     onError: (err: Error) => {
       toast.error(err.message || "Failed to start training");
@@ -95,6 +105,34 @@ export function TrainingTab({ projectId }: { projectId: string }) {
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
+            {/* Compute Mode */}
+            <div>
+              <Label>Compute</Label>
+              <div className="grid grid-cols-2 gap-2 mt-1.5">
+                {COMPUTE_OPTIONS.map((opt) => (
+                  <button
+                    key={opt.value}
+                    type="button"
+                    onClick={() => setComputeMode(opt.value)}
+                    className={`flex items-center gap-3 border p-3 text-left text-sm transition-colors ${
+                      computeMode === opt.value
+                        ? "border-ecole-orange bg-ecole-orange/5"
+                        : "border-input hover:border-muted-foreground"
+                    }`}
+                  >
+                    <opt.icon className={`h-4 w-4 shrink-0 ${
+                      computeMode === opt.value ? "text-ecole-orange" : "text-muted-foreground"
+                    }`} />
+                    <div>
+                      <p className="font-medium font-mono text-xs">{opt.label}</p>
+                      <p className="text-xs text-muted-foreground">{opt.description}</p>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Base Model */}
             <div>
               <Label>Base Model</Label>
               <select
@@ -129,13 +167,28 @@ export function TrainingTab({ projectId }: { projectId: string }) {
               </div>
             </div>
 
+            {computeMode === "hf_jobs" && (
+              <p className="text-xs text-muted-foreground border border-border p-2">
+                Requires HuggingFace Pro or Enterprise. Training will run on HF infrastructure
+                ({baseModel.includes("8B") ? "A10G Large" : "A10G Small"} GPU). Configure your HF token in Settings.
+              </p>
+            )}
+
             <Button
               onClick={() => launchMutation.mutate()}
               disabled={launchMutation.isPending}
               className="w-full bg-ecole-orange text-white hover:bg-ecole-orange-light"
             >
-              <Play className="mr-2 h-4 w-4" />
-              {launchMutation.isPending ? "Launching..." : "Start Training"}
+              {computeMode === "hf_jobs" ? (
+                <Cloud className="mr-2 h-4 w-4" />
+              ) : (
+                <Play className="mr-2 h-4 w-4" />
+              )}
+              {launchMutation.isPending
+                ? "Launching..."
+                : computeMode === "hf_jobs"
+                  ? "Launch on HF Jobs"
+                  : "Start Training"}
             </Button>
           </CardContent>
         </Card>
@@ -150,7 +203,15 @@ export function TrainingTab({ projectId }: { projectId: string }) {
             <Card key={run.id} className="p-4">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm font-mono font-medium">{run.base_model.split("/").pop()}</p>
+                  <div className="flex items-center gap-2">
+                    <p className="text-sm font-mono font-medium">{run.base_model.split("/").pop()}</p>
+                    {run.compute_mode === "hf_jobs" && (
+                      <Badge variant="outline" className="text-xs gap-1">
+                        <Cloud className="h-3 w-3" />
+                        HF Jobs
+                      </Badge>
+                    )}
+                  </div>
                   <p className="text-xs text-muted-foreground mt-1">
                     Epoch {run.current_epoch}/{run.total_epochs || "?"}
                     {run.train_loss != null && ` / Loss: ${run.train_loss.toFixed(4)}`}
@@ -197,15 +258,17 @@ export function TrainingTab({ projectId }: { projectId: string }) {
                     <BarChart3 className="mr-1.5 h-3.5 w-3.5" />
                     Benchmark
                   </Button>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() => uploadHFMutation.mutate(run.id)}
-                    disabled={uploadHFMutation.isPending || !!run.hf_repo_id}
-                  >
-                    <Upload className="mr-1.5 h-3.5 w-3.5" />
-                    {run.hf_repo_id ? "Pushed to HF" : "Push to HF"}
-                  </Button>
+                  {run.compute_mode !== "hf_jobs" && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => uploadHFMutation.mutate(run.id)}
+                      disabled={uploadHFMutation.isPending || !!run.hf_repo_id}
+                    >
+                      <Upload className="mr-1.5 h-3.5 w-3.5" />
+                      {run.hf_repo_id ? "Pushed to HF" : "Push to HF"}
+                    </Button>
+                  )}
                   {run.hf_repo_id && (
                     <a
                       href={`https://huggingface.co/${run.hf_repo_id}`}

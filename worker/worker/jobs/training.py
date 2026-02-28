@@ -2,40 +2,23 @@
 
 import json
 import os
-
-import torch
-from datasets import Dataset
-from peft import LoraConfig, TaskType
-from transformers import AutoModelForCausalLM, AutoTokenizer, TrainerCallback
-from trl import SFTConfig, SFTTrainer
+import time
 
 from worker.client import APIClient
 
 
 OUTPUT_DIR = os.environ.get("ECOLE_MODEL_DIR", "/tmp/ecole_models")
+HF_JOB_ENTRY_SCRIPT = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.dirname(__file__))),
+    "scripts",
+    "hf_job_entry.py",
+)
 
-
-class ProgressCallback(TrainerCallback):
-    """Report training progress back to the API."""
-
-    def __init__(self, client: APIClient, training_run_id: str, total_epochs: int):
-        self.client = client
-        self.training_run_id = training_run_id
-        self.total_epochs = total_epochs
-
-    def on_log(self, args, state, control, logs=None, **kwargs):
-        if logs and "loss" in logs:
-            epoch = int(state.epoch) if state.epoch else 0
-            loss = logs.get("loss")
-            self.client.update_training_progress(
-                self.training_run_id, epoch=epoch, loss=loss
-            )
-
-    def on_epoch_end(self, args, state, control, **kwargs):
-        epoch = int(state.epoch) if state.epoch else 0
-        self.client.update_training_progress(
-            self.training_run_id, epoch=epoch
-        )
+# GPU flavor mapping for HF Jobs
+HF_JOB_FLAVORS = {
+    "mistralai/Ministral-3b-instruct": "a10g-small",
+    "mistralai/Ministral-8B-Instruct-2410": "a10g-large",
+}
 
 
 def run(client: APIClient, job: dict) -> None:
@@ -50,6 +33,140 @@ def run(client: APIClient, job: dict) -> None:
 
     # Fetch training run config
     run_info = client.get_training_run(training_run_id)
+    compute_mode = run_info.get("compute_mode", "local")
+
+    if compute_mode == "hf_jobs":
+        _run_hf_jobs(client, job, project_id, training_run_id, run_info)
+    else:
+        _run_local(client, job, project_id, training_run_id, run_info)
+
+
+def _run_hf_jobs(
+    client: APIClient,
+    job: dict,
+    project_id: str,
+    training_run_id: str,
+    run_info: dict,
+) -> None:
+    """Dispatch training to HF Jobs infrastructure."""
+    from huggingface_hub import run_uv_job, inspect_job
+
+    base_model = run_info["base_model"]
+    lora_config_raw = run_info.get("lora_config", {})
+    training_config_raw = run_info.get("training_config", {})
+
+    if isinstance(lora_config_raw, str):
+        lora_config_raw = json.loads(lora_config_raw)
+    if isinstance(training_config_raw, str):
+        training_config_raw = json.loads(training_config_raw)
+
+    # Get API keys
+    keys = client.get_api_keys(project_id)
+    hf_token = keys.get("hf_token") or os.getenv("HF_TOKEN", "")
+    if not hf_token:
+        raise ValueError("HuggingFace token required for HF Jobs compute mode.")
+
+    # Fetch dataset
+    client.update_training_progress(training_run_id, epoch=0)
+    dataset_items = client.get_dataset(project_id, eval_only=False)
+    train_items = [
+        {"question": item["question"], "answer": item["answer"]}
+        for item in dataset_items
+        if not item.get("is_eval", False)
+    ]
+
+    if not train_items:
+        raise ValueError("No training data available.")
+
+    print(f"[training:hf_jobs] {len(train_items)} training examples")
+
+    # Build output repo name
+    project = client.get_project(project_id)
+    project_name = project.get("name", "model").lower().replace(" ", "-")
+    model_short = base_model.split("/")[-1].lower()
+
+    from huggingface_hub import HfApi
+    hf_api = HfApi(token=hf_token)
+    user_info = hf_api.whoami()
+    username = user_info.get("name", user_info.get("user", "user"))
+    output_repo = f"{username}/ecole-{project_name}-{model_short}"
+
+    # Select GPU flavor
+    flavor = HF_JOB_FLAVORS.get(base_model, "a10g-small")
+
+    # Estimate timeout based on dataset size and epochs
+    num_epochs = training_config_raw.get("num_train_epochs", 3)
+    estimated_minutes = max(30, len(train_items) * num_epochs // 10)
+    timeout = f"{min(estimated_minutes, 360)}m"
+
+    print(f"[training:hf_jobs] Dispatching to HF Jobs: flavor={flavor}, timeout={timeout}")
+
+    # Dispatch the job
+    hf_job = run_uv_job(
+        HF_JOB_ENTRY_SCRIPT,
+        flavor=flavor,
+        timeout=timeout,
+        env={
+            "ECOLE_DATASET": json.dumps(train_items),
+            "ECOLE_BASE_MODEL": base_model,
+            "ECOLE_LORA_CONFIG": json.dumps(lora_config_raw),
+            "ECOLE_TRAINING_CONFIG": json.dumps(training_config_raw),
+            "ECOLE_OUTPUT_REPO": output_repo,
+        },
+        secrets={"HF_TOKEN": hf_token},
+        token=hf_token,
+    )
+
+    hf_job_id = hf_job.id
+    print(f"[training:hf_jobs] Dispatched HF Job: {hf_job_id} — {hf_job.url}")
+
+    # Update training run status
+    client.update_training_progress(training_run_id, epoch=0)
+
+    # Poll for completion
+    poll_interval = 30  # seconds
+    while True:
+        time.sleep(poll_interval)
+
+        job_info = inspect_job(hf_job_id, token=hf_token)
+        stage = job_info.status.stage
+
+        print(f"[training:hf_jobs] Job {hf_job_id} status: {stage}")
+
+        if stage == "COMPLETED":
+            # Job finished — adapter should be on HF Hub
+            client.set_training_hf_repo(training_run_id, output_repo)
+            client.complete_training_run(training_run_id, f"hf://{output_repo}")
+            client.update_project_status(project_id, "trained")
+            print(f"[training:hf_jobs] Done: adapter at {output_repo}")
+            return
+
+        elif stage == "ERROR":
+            error_msg = job_info.status.message or "HF Job failed"
+            client.fail_training_run(training_run_id, error_msg)
+            raise RuntimeError(f"HF Job failed: {error_msg}")
+
+        elif stage in ("RUNNING", "STARTING"):
+            # Report progress (we don't have epoch-level granularity from HF Jobs)
+            client.update_training_progress(training_run_id, epoch=0)
+
+        # If job is in any other state (QUEUED, etc.), just keep polling
+
+
+def _run_local(
+    client: APIClient,
+    job: dict,
+    project_id: str,
+    training_run_id: str,
+    run_info: dict,
+) -> None:
+    """Run training locally with GPU."""
+    import torch
+    from datasets import Dataset
+    from peft import LoraConfig, TaskType
+    from transformers import AutoModelForCausalLM, AutoTokenizer, TrainerCallback
+    from trl import SFTConfig, SFTTrainer
+
     base_model = run_info["base_model"]
     lora_config_raw = run_info.get("lora_config", {})
     training_config_raw = run_info.get("training_config", {})
@@ -68,7 +185,7 @@ def run(client: APIClient, job: dict) -> None:
     if not train_items:
         raise ValueError("No training data available. Generate a dataset first.")
 
-    print(f"[training] {len(train_items)} training examples")
+    print(f"[training:local] {len(train_items)} training examples")
 
     # Format as chat messages
     formatted = _format_dataset(train_items)
@@ -96,7 +213,7 @@ def run(client: APIClient, job: dict) -> None:
     output_path = os.path.join(OUTPUT_DIR, project_id, training_run_id)
     os.makedirs(output_path, exist_ok=True)
 
-    print(f"[training] Loading model: {base_model}")
+    print(f"[training:local] Loading model: {base_model}")
 
     # Load tokenizer
     tokenizer = AutoTokenizer.from_pretrained(base_model)
@@ -137,9 +254,18 @@ def run(client: APIClient, job: dict) -> None:
     )
 
     # Progress callback
-    progress_cb = ProgressCallback(client, training_run_id, num_epochs)
+    class ProgressCallback(TrainerCallback):
+        def on_log(self, args, state, control, logs=None, **kwargs):
+            if logs and "loss" in logs:
+                epoch = int(state.epoch) if state.epoch else 0
+                loss = logs.get("loss")
+                client.update_training_progress(training_run_id, epoch=epoch, loss=loss)
 
-    print(f"[training] Starting SFTTrainer: {num_epochs} epochs, batch={batch_size}, lr={lr}")
+        def on_epoch_end(self, args, state, control, **kwargs):
+            epoch = int(state.epoch) if state.epoch else 0
+            client.update_training_progress(training_run_id, epoch=epoch)
+
+    print(f"[training:local] Starting SFTTrainer: {num_epochs} epochs, batch={batch_size}, lr={lr}")
 
     trainer = SFTTrainer(
         model=model,
@@ -147,7 +273,7 @@ def run(client: APIClient, job: dict) -> None:
         train_dataset=dataset,
         processing_class=tokenizer,
         peft_config=peft_config,
-        callbacks=[progress_cb],
+        callbacks=[ProgressCallback()],
     )
 
     # Train
@@ -158,13 +284,13 @@ def run(client: APIClient, job: dict) -> None:
     trainer.save_model(adapter_path)
     tokenizer.save_pretrained(adapter_path)
 
-    print(f"[training] Adapter saved to {adapter_path}")
+    print(f"[training:local] Adapter saved to {adapter_path}")
 
     # Report completion
     client.complete_training_run(training_run_id, adapter_path)
     client.update_project_status(project_id, "trained")
 
-    print(f"[training] Done: {training_run_id}")
+    print(f"[training:local] Done: {training_run_id}")
 
 
 def _format_dataset(items: list[dict]) -> list[dict]:
