@@ -7,6 +7,7 @@ CREATE TABLE users (
     email                 TEXT NOT NULL,
     name                  TEXT,
     anthropic_api_key_enc BYTEA,
+    mistral_api_key_enc   BYTEA,
     hf_api_token_enc      BYTEA,
     created_at            TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at            TIMESTAMPTZ NOT NULL DEFAULT NOW()
@@ -70,64 +71,73 @@ CREATE INDEX idx_dataset_eval ON dataset_items(project_id, is_eval);
 
 -- Training runs
 CREATE TABLE training_runs (
-    id                UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    project_id        UUID NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
-    base_model        TEXT NOT NULL DEFAULT 'mistralai/Ministral-3b-instruct',
-    lora_config       JSONB NOT NULL DEFAULT '{"r":16,"lora_alpha":32,"lora_dropout":0.05,"target_modules":["q_proj","k_proj","v_proj","o_proj"],"task_type":"CAUSAL_LM"}',
-    training_config   JSONB NOT NULL DEFAULT '{"num_train_epochs":3,"per_device_train_batch_size":4,"learning_rate":1e-4,"warmup_ratio":0.1,"max_seq_length":2048,"gradient_accumulation_steps":4,"logging_steps":10,"bf16":true}',
-    compute_mode      TEXT NOT NULL DEFAULT 'local'
-                      CHECK (compute_mode IN ('local','hf_jobs')),
-    hf_namespace      TEXT,
-    hf_job_id         TEXT,
-    worker_id         UUID,
-    status            TEXT NOT NULL DEFAULT 'pending'
-                      CHECK (status IN ('pending','queued','downloading','training','completed','failed','cancelled')),
-    current_epoch     INT DEFAULT 0,
-    total_epochs      INT,
-    train_loss        FLOAT,
-    output_model_path TEXT,
-    hf_repo_id        TEXT,
-    error_message     TEXT,
-    started_at        TIMESTAMPTZ,
-    completed_at      TIMESTAMPTZ,
-    created_at        TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    updated_at        TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    id                    UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    project_id            UUID NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+    base_model            TEXT NOT NULL DEFAULT 'mistralai/Ministral-3b-instruct',
+    lora_config           JSONB NOT NULL DEFAULT '{"r":16,"lora_alpha":32,"lora_dropout":0.05,"target_modules":["q_proj","k_proj","v_proj","o_proj"],"task_type":"CAUSAL_LM"}',
+    training_config       JSONB NOT NULL DEFAULT '{"num_train_epochs":3,"per_device_train_batch_size":4,"learning_rate":1e-4,"warmup_ratio":0.1,"max_seq_length":2048,"gradient_accumulation_steps":4,"logging_steps":10,"bf16":true}',
+    compute_mode          TEXT NOT NULL DEFAULT 'local'
+                          CHECK (compute_mode IN ('local','hf_jobs')),
+    hf_flavor             TEXT,
+    hf_namespace          TEXT,
+    hf_job_id             TEXT,
+    worker_id             UUID,
+    status                TEXT NOT NULL DEFAULT 'pending'
+                          CHECK (status IN ('pending','queued','downloading','training','completed','failed','cancelled')),
+    current_epoch         INT DEFAULT 0,
+    total_epochs          INT,
+    train_loss            FLOAT,
+    current_step          INT DEFAULT 0,
+    total_steps           INT,
+    grad_norm             FLOAT,
+    learning_rate_current FLOAT,
+    logs                  TEXT DEFAULT '',
+    output_model_path     TEXT,
+    hf_repo_id            TEXT,
+    error_message         TEXT,
+    started_at            TIMESTAMPTZ,
+    completed_at          TIMESTAMPTZ,
+    created_at            TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at            TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 CREATE INDEX idx_training_project ON training_runs(project_id);
 
 -- Benchmark runs
 CREATE TABLE benchmarks (
-    id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    training_run_id UUID NOT NULL REFERENCES training_runs(id) ON DELETE CASCADE,
-    project_id      UUID NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
-    model_type      TEXT NOT NULL CHECK (model_type IN ('base','finetuned')),
-    epoch           INT,
-    accuracy        FLOAT,
-    avg_score       FLOAT,
-    total_questions INT,
-    status          TEXT NOT NULL DEFAULT 'pending'
-                    CHECK (status IN ('pending','running','completed','failed')),
-    results         JSONB DEFAULT '[]',
-    created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    completed_at    TIMESTAMPTZ
+    id                  UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    training_run_id     UUID NOT NULL REFERENCES training_runs(id) ON DELETE CASCADE,
+    project_id          UUID NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+    model_type          TEXT NOT NULL CHECK (model_type IN ('base','finetuned','teacher')),
+    epoch               INT,
+    accuracy            FLOAT,
+    avg_score           FLOAT,
+    semantic_similarity FLOAT,
+    rouge_l             FLOAT,
+    total_questions     INT,
+    status              TEXT NOT NULL DEFAULT 'pending'
+                        CHECK (status IN ('pending','running','completed','failed')),
+    results             JSONB DEFAULT '[]',
+    created_at          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    completed_at        TIMESTAMPTZ
 );
 CREATE INDEX idx_benchmarks_training ON benchmarks(training_run_id);
 
 -- Job queue
 CREATE TABLE jobs (
-    id           UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    job_type     TEXT NOT NULL CHECK (job_type IN ('harness','training','benchmark')),
-    project_id   UUID NOT NULL REFERENCES projects(id),
-    payload      JSONB NOT NULL DEFAULT '{}',
-    status       TEXT NOT NULL DEFAULT 'pending'
-                 CHECK (status IN ('pending','claimed','running','completed','failed')),
-    worker_id    TEXT,
-    attempts     INT NOT NULL DEFAULT 0,
-    max_attempts INT NOT NULL DEFAULT 3,
-    error        TEXT,
-    created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    claimed_at   TIMESTAMPTZ,
-    completed_at TIMESTAMPTZ
+    id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    job_type      TEXT NOT NULL CHECK (job_type IN ('harness','training','benchmark')),
+    project_id    UUID NOT NULL REFERENCES projects(id),
+    payload       JSONB NOT NULL DEFAULT '{}',
+    status        TEXT NOT NULL DEFAULT 'pending'
+                  CHECK (status IN ('pending','claimed','running','completed','failed')),
+    worker_id     TEXT,
+    attempts      INT NOT NULL DEFAULT 0,
+    max_attempts  INT NOT NULL DEFAULT 3,
+    error         TEXT,
+    progress_data JSONB DEFAULT '{}',
+    created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    claimed_at    TIMESTAMPTZ,
+    completed_at  TIMESTAMPTZ
 );
 CREATE INDEX idx_jobs_status ON jobs(status, created_at);
 
