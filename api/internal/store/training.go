@@ -26,6 +26,24 @@ func (s *Store) CreateTrainingRun(ctx context.Context, projectID, baseModel, com
 	return &t, nil
 }
 
+func (s *Store) GetTrainingRunByID(ctx context.Context, id string) (*model.TrainingRun, error) {
+	var t model.TrainingRun
+	err := s.pool.QueryRow(ctx, `
+		SELECT id, project_id, base_model, lora_config, training_config, compute_mode,
+			hf_job_id, worker_id, status, current_epoch, total_epochs, train_loss,
+			output_model_path, hf_repo_id, error_message, started_at, completed_at, created_at, updated_at
+		FROM training_runs WHERE id = $1
+	`, id).Scan(
+		&t.ID, &t.ProjectID, &t.BaseModel, &t.LoRAConfig, &t.TrainingConfig, &t.ComputeMode,
+		&t.HFJobID, &t.WorkerID, &t.Status, &t.CurrentEpoch, &t.TotalEpochs, &t.TrainLoss,
+		&t.OutputModelPath, &t.HFRepoID, &t.ErrorMessage, &t.StartedAt, &t.CompletedAt, &t.CreatedAt, &t.UpdatedAt,
+	)
+	if err != nil {
+		return nil, err
+	}
+	return &t, nil
+}
+
 func (s *Store) GetTrainingRun(ctx context.Context, id, projectID string) (*model.TrainingRun, error) {
 	var t model.TrainingRun
 	err := s.pool.QueryRow(ctx, `
@@ -92,5 +110,12 @@ func (s *Store) FailTrainingRun(ctx context.Context, id, errorMsg string) error 
 		UPDATE training_runs SET status = 'failed', error_message = $2, completed_at = NOW(), updated_at = NOW()
 		WHERE id = $1
 	`, id, errorMsg)
+	return err
+}
+
+func (s *Store) SetTrainingHFRepo(ctx context.Context, id, repoID string) error {
+	_, err := s.pool.Exec(ctx, `
+		UPDATE training_runs SET hf_repo_id = $2, updated_at = NOW() WHERE id = $1
+	`, id, repoID)
 	return err
 }

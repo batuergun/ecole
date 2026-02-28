@@ -6,7 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { Play } from "lucide-react";
+import { Play, Upload, BarChart3 } from "lucide-react";
 
 const MODEL_OPTIONS = [
   { value: "mistralai/Ministral-3b-instruct", label: "Ministral 3B (Fast)" },
@@ -51,6 +51,20 @@ export function TrainingTab({ projectId }: { projectId: string }) {
       }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["training-runs", projectId] });
+    },
+  });
+
+  const uploadHFMutation = useMutation({
+    mutationFn: (runId: string) => api.uploadToHF(projectId, runId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["training-runs", projectId] });
+    },
+  });
+
+  const benchmarkMutation = useMutation({
+    mutationFn: (runId: string) => api.triggerBenchmark(projectId, runId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["benchmarks", projectId] });
     },
   });
 
@@ -143,6 +157,7 @@ export function TrainingTab({ projectId }: { projectId: string }) {
                   {run.status}
                 </Badge>
               </div>
+
               {run.status === "training" && (
                 <div className="mt-3 h-1 w-full bg-muted">
                   <div
@@ -151,6 +166,43 @@ export function TrainingTab({ projectId }: { projectId: string }) {
                       width: `${run.total_epochs ? (run.current_epoch / run.total_epochs) * 100 : 0}%`,
                     }}
                   />
+                </div>
+              )}
+
+              {run.status === "failed" && run.error_message && (
+                <p className="mt-2 text-xs text-destructive font-mono">{run.error_message}</p>
+              )}
+
+              {run.status === "completed" && (
+                <div className="mt-3 flex gap-2">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => benchmarkMutation.mutate(run.id)}
+                    disabled={benchmarkMutation.isPending}
+                  >
+                    <BarChart3 className="mr-1.5 h-3.5 w-3.5" />
+                    Benchmark
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => uploadHFMutation.mutate(run.id)}
+                    disabled={uploadHFMutation.isPending || !!run.hf_repo_id}
+                  >
+                    <Upload className="mr-1.5 h-3.5 w-3.5" />
+                    {run.hf_repo_id ? "Pushed to HF" : "Push to HF"}
+                  </Button>
+                  {run.hf_repo_id && (
+                    <a
+                      href={`https://huggingface.co/${run.hf_repo_id}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center text-xs text-ecole-orange hover:underline font-mono"
+                    >
+                      {run.hf_repo_id}
+                    </a>
+                  )}
                 </div>
               )}
             </Card>

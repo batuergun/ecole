@@ -27,8 +27,8 @@ func New(cfg *config.Config, s *store.Store, st *storage.Storage, q *queue.Queue
 	harnessH := handler.NewHarnessHandler(s, q)
 	trainingH := handler.NewTrainingHandler(s, q)
 	benchmarkH := handler.NewBenchmarkHandler(s, q)
-	workerH := handler.NewWorkerHandler(s, q)
-	settingsH := handler.NewSettingsHandler()
+	workerH := handler.NewWorkerHandler(s, q, st, cfg)
+	settingsH := handler.NewSettingsHandler(s, cfg)
 
 	// Auth routes (no auth middleware)
 	auth := r.Group("/api/auth")
@@ -68,19 +68,40 @@ func New(cfg *config.Config, s *store.Store, st *storage.Storage, q *queue.Queue
 		api.POST("/projects/:id/training", trainingH.Launch)
 		api.GET("/projects/:id/training", trainingH.List)
 		api.GET("/projects/:id/training/:tid", trainingH.Get)
+		api.POST("/projects/:id/training/:tid/upload-hf", trainingH.UploadHF)
 
 		// Benchmark
 		api.POST("/projects/:id/benchmark", benchmarkH.Trigger)
 		api.GET("/projects/:id/benchmark", benchmarkH.List)
 	}
 
-	// Worker routes (separate auth — worker token)
+	// Worker routes (no user auth — internal use)
 	worker := r.Group("/api/worker")
 	{
 		worker.GET("/poll", workerH.Poll)
 		worker.POST("/jobs/:jid/progress", workerH.Progress)
 		worker.POST("/jobs/:jid/complete", workerH.Complete)
 		worker.POST("/jobs/:jid/fail", workerH.Fail)
+
+		// Worker data access
+		worker.GET("/projects/:pid", workerH.GetProject)
+		worker.GET("/projects/:pid/uploads", workerH.GetUploads)
+		worker.GET("/projects/:pid/keys", workerH.GetAPIKeys)
+		worker.PATCH("/projects/:pid/status", workerH.UpdateProjectStatus)
+		worker.GET("/files", workerH.DownloadFile)
+		worker.POST("/chunks", workerH.CreateChunk)
+		worker.POST("/dataset/batch", workerH.BatchCreateDataset)
+
+		// Training run operations
+		worker.GET("/training-runs/:tid", workerH.GetTrainingRun)
+		worker.PATCH("/training-runs/:tid/progress", workerH.UpdateTrainingProgress)
+		worker.POST("/training-runs/:tid/complete", workerH.CompleteTrainingRun)
+		worker.POST("/training-runs/:tid/fail", workerH.FailTrainingRun)
+		worker.POST("/training-runs/:tid/hf-repo", workerH.SetTrainingHFRepo)
+
+		// Benchmark operations
+		worker.POST("/benchmarks", workerH.CreateBenchmarkRecord)
+		worker.POST("/benchmarks/:bid/complete", workerH.CompleteBenchmarkRecord)
 	}
 
 	return r

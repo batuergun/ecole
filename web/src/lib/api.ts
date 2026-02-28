@@ -80,6 +80,8 @@ export const api = {
     request<TrainingRun[]>(`/projects/${projectId}/training`),
   getTrainingRun: (projectId: string, runId: string) =>
     request<TrainingRun>(`/projects/${projectId}/training/${runId}`),
+  uploadToHF: (projectId: string, runId: string) =>
+    request<Job>(`/projects/${projectId}/training/${runId}/upload-hf`, { method: "POST" }),
 
   // Benchmark
   triggerBenchmark: (projectId: string, trainingRunId: string) =>

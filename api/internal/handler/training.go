@@ -94,6 +94,39 @@ func (h *TrainingHandler) List(c *gin.Context) {
 	c.JSON(http.StatusOK, runs)
 }
 
+func (h *TrainingHandler) UploadHF(c *gin.Context) {
+	userID := middleware.GetUserID(c)
+	projectID := c.Param("id")
+	trainingRunID := c.Param("tid")
+
+	if _, err := h.store.GetProject(c.Request.Context(), projectID, userID); err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "project not found"})
+		return
+	}
+
+	run, err := h.store.GetTrainingRun(c.Request.Context(), trainingRunID, projectID)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "training run not found"})
+		return
+	}
+
+	if run.Status != "completed" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "training run is not completed"})
+		return
+	}
+
+	payload, _ := json.Marshal(map[string]string{
+		"project_id":      projectID,
+		"training_run_id": trainingRunID,
+	})
+	job, err := h.queue.Enqueue(c.Request.Context(), "hf_upload", projectID, payload)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to enqueue HF upload job"})
+		return
+	}
+	c.JSON(http.StatusCreated, job)
+}
+
 func (h *TrainingHandler) Get(c *gin.Context) {
 	userID := middleware.GetUserID(c)
 	projectID := c.Param("id")

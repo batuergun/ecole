@@ -52,3 +52,10 @@ func (s *Store) CompleteBenchmark(ctx context.Context, id string, accuracy, avgS
 	`, id, accuracy, avgScore, totalQuestions, results)
 	return err
 }
+
+func (s *Store) FailBenchmark(ctx context.Context, id, errorMsg string) error {
+	_, err := s.pool.Exec(ctx, `
+		UPDATE benchmarks SET status = 'failed', completed_at = NOW() WHERE id = $1
+	`, id)
+	return err
+}
