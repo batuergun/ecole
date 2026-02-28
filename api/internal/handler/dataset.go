@@ -85,3 +85,52 @@ func (h *DatasetHandler) Delete(c *gin.Context) {
 	}
 	c.JSON(http.StatusOK, gin.H{"ok": true})
 }
+
+type batchDeleteRequest struct {
+	IDs []string `json:"ids" binding:"required"`
+}
+
+func (h *DatasetHandler) BatchDelete(c *gin.Context) {
+	var req batchDeleteRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	if len(req.IDs) > 100 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "max 100 items per batch"})
+		return
+	}
+
+	userID := middleware.GetUserID(c)
+	projectID := c.Param("id")
+
+	if _, err := h.store.GetProject(c.Request.Context(), projectID, userID); err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "project not found"})
+		return
+	}
+
+	deleted, err := h.store.BatchDeleteDatasetItems(c.Request.Context(), req.IDs, projectID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to batch delete"})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"deleted": deleted})
+}
+
+func (h *DatasetHandler) Stats(c *gin.Context) {
+	userID := middleware.GetUserID(c)
+	projectID := c.Param("id")
+
+	if _, err := h.store.GetProject(c.Request.Context(), projectID, userID); err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "project not found"})
+		return
+	}
+
+	stats, err := h.store.GetDatasetStats(c.Request.Context(), projectID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to get stats"})
+		return
+	}
+	c.JSON(http.StatusOK, stats)
+}

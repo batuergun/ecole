@@ -69,6 +69,7 @@ type TrainingRun struct {
 	LoRAConfig      json.RawMessage `json:"lora_config" db:"lora_config"`
 	TrainingConfig  json.RawMessage `json:"training_config" db:"training_config"`
 	ComputeMode     string          `json:"compute_mode" db:"compute_mode"`
+	HFFlavor        *string         `json:"hf_flavor" db:"hf_flavor"`
 	HFNamespace     *string         `json:"hf_namespace" db:"hf_namespace"`
 	HFJobID         *string         `json:"hf_job_id" db:"hf_job_id"`
 	WorkerID        *string         `json:"worker_id" db:"worker_id"`
@@ -109,10 +110,11 @@ type Job struct {
 	WorkerID    *string         `json:"worker_id" db:"worker_id"`
 	Attempts    int             `json:"attempts" db:"attempts"`
 	MaxAttempts int             `json:"max_attempts" db:"max_attempts"`
-	Error       *string         `json:"error" db:"error"`
-	CreatedAt   time.Time       `json:"created_at" db:"created_at"`
-	ClaimedAt   *time.Time      `json:"claimed_at" db:"claimed_at"`
-	CompletedAt *time.Time      `json:"completed_at" db:"completed_at"`
+	Error        *string         `json:"error" db:"error"`
+	ProgressData json.RawMessage `json:"progress_data" db:"progress_data"`
+	CreatedAt    time.Time       `json:"created_at" db:"created_at"`
+	ClaimedAt    *time.Time      `json:"claimed_at" db:"claimed_at"`
+	CompletedAt  *time.Time      `json:"completed_at" db:"completed_at"`
 }
 
 type Worker struct {

@@ -24,6 +24,7 @@ type launchTrainingRequest struct {
 	LoRAConfig     json.RawMessage `json:"lora_config"`
 	TrainingConfig json.RawMessage `json:"training_config"`
 	ComputeMode    string          `json:"compute_mode"`
+	HFFlavor       string          `json:"hf_flavor"`
 	HFNamespace    string          `json:"hf_namespace"`
 }
 
@@ -43,7 +44,7 @@ func (h *TrainingHandler) Launch(c *gin.Context) {
 	}
 
 	if req.BaseModel == "" {
-		req.BaseModel = "mistralai/Ministral-3b-instruct"
+		req.BaseModel = "mistralai/Ministral-3-3B-Reasoning-2512"
 	}
 	if req.ComputeMode == "" {
 		req.ComputeMode = "local"
@@ -59,8 +60,12 @@ func (h *TrainingHandler) Launch(c *gin.Context) {
 	if req.HFNamespace != "" {
 		hfNamespace = &req.HFNamespace
 	}
+	var hfFlavor *string
+	if req.HFFlavor != "" {
+		hfFlavor = &req.HFFlavor
+	}
 
-	run, err := h.store.CreateTrainingRun(c.Request.Context(), projectID, req.BaseModel, req.ComputeMode, hfNamespace, req.LoRAConfig, req.TrainingConfig)
+	run, err := h.store.CreateTrainingRun(c.Request.Context(), projectID, req.BaseModel, req.ComputeMode, hfFlavor, hfNamespace, req.LoRAConfig, req.TrainingConfig)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create training run"})
 		return

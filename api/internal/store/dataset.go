@@ -105,3 +105,33 @@ func (s *Store) DeleteDatasetItem(ctx context.Context, id, projectID string) err
 	_, err := s.pool.Exec(ctx, `UPDATE dataset_items SET is_deleted = true, updated_at = NOW() WHERE id = $1 AND project_id = $2`, id, projectID)
 	return err
 }
+
+func (s *Store) BatchDeleteDatasetItems(ctx context.Context, ids []string, projectID string) (int64, error) {
+	tag, err := s.pool.Exec(ctx, `UPDATE dataset_items SET is_deleted = true, updated_at = NOW() WHERE id = ANY($1) AND project_id = $2 AND is_deleted = false`, ids, projectID)
+	if err != nil {
+		return 0, err
+	}
+	return tag.RowsAffected(), nil
+}
+
+type DatasetStats struct {
+	Total      int `json:"total"`
+	TrainCount int `json:"train_count"`
+	EvalCount  int `json:"eval_count"`
+}
+
+func (s *Store) GetDatasetStats(ctx context.Context, projectID string) (*DatasetStats, error) {
+	var stats DatasetStats
+	err := s.pool.QueryRow(ctx, `
+		SELECT
+			COUNT(*) AS total,
+			COUNT(*) FILTER (WHERE is_eval = false) AS train_count,
+			COUNT(*) FILTER (WHERE is_eval = true) AS eval_count
+		FROM dataset_items
+		WHERE project_id = $1 AND is_deleted = false
+	`, projectID).Scan(&stats.Total, &stats.TrainCount, &stats.EvalCount)
+	if err != nil {
+		return nil, err
+	}
+	return &stats, nil
+}

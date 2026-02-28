@@ -55,7 +55,7 @@ func (h *WorkerHandler) Progress(c *gin.Context) {
 	}
 
 	jobID := c.Param("jid")
-	if err := h.queue.UpdateProgress(c.Request.Context(), jobID, req.Status); err != nil {
+	if err := h.queue.UpdateProgress(c.Request.Context(), jobID, req.Status, req.Data); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update progress"})
 		return
 	}

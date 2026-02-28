@@ -25,10 +25,10 @@ func (q *Queue) Enqueue(ctx context.Context, jobType, projectID string, payload 
 	err := q.pool.QueryRow(ctx, `
 		INSERT INTO jobs (job_type, project_id, payload)
 		VALUES ($1, $2, $3)
-		RETURNING id, job_type, project_id, payload, status, worker_id, attempts, max_attempts, error, created_at, claimed_at, completed_at
+		RETURNING id, job_type, project_id, payload, status, worker_id, attempts, max_attempts, error, progress_data, created_at, claimed_at, completed_at
 	`, jobType, projectID, payload).Scan(
 		&j.ID, &j.JobType, &j.ProjectID, &j.Payload, &j.Status,
-		&j.WorkerID, &j.Attempts, &j.MaxAttempts, &j.Error,
+		&j.WorkerID, &j.Attempts, &j.MaxAttempts, &j.Error, &j.ProgressData,
 		&j.CreatedAt, &j.ClaimedAt, &j.CompletedAt,
 	)
 	if err != nil {
@@ -48,10 +48,10 @@ func (q *Queue) Claim(ctx context.Context, workerID string) (*model.Job, error) 
 			FOR UPDATE SKIP LOCKED
 			LIMIT 1
 		)
-		RETURNING id, job_type, project_id, payload, status, worker_id, attempts, max_attempts, error, created_at, claimed_at, completed_at
+		RETURNING id, job_type, project_id, payload, status, worker_id, attempts, max_attempts, error, progress_data, created_at, claimed_at, completed_at
 	`, workerID).Scan(
 		&j.ID, &j.JobType, &j.ProjectID, &j.Payload, &j.Status,
-		&j.WorkerID, &j.Attempts, &j.MaxAttempts, &j.Error,
+		&j.WorkerID, &j.Attempts, &j.MaxAttempts, &j.Error, &j.ProgressData,
 		&j.CreatedAt, &j.ClaimedAt, &j.CompletedAt,
 	)
 	if err != nil {
@@ -60,8 +60,11 @@ func (q *Queue) Claim(ctx context.Context, workerID string) (*model.Job, error) 
 	return &j, nil
 }
 
-func (q *Queue) UpdateProgress(ctx context.Context, jobID, status string) error {
-	_, err := q.pool.Exec(ctx, `UPDATE jobs SET status = $2 WHERE id = $1`, jobID, status)
+func (q *Queue) UpdateProgress(ctx context.Context, jobID, status string, data json.RawMessage) error {
+	if data == nil {
+		data = json.RawMessage(`{}`)
+	}
+	_, err := q.pool.Exec(ctx, `UPDATE jobs SET status = $2, progress_data = $3 WHERE id = $1`, jobID, status, data)
 	return err
 }
 
@@ -82,11 +85,11 @@ func (q *Queue) Fail(ctx context.Context, jobID, errMsg string) error {
 func (q *Queue) GetJob(ctx context.Context, jobID string) (*model.Job, error) {
 	var j model.Job
 	err := q.pool.QueryRow(ctx, `
-		SELECT id, job_type, project_id, payload, status, worker_id, attempts, max_attempts, error, created_at, claimed_at, completed_at
+		SELECT id, job_type, project_id, payload, status, worker_id, attempts, max_attempts, error, progress_data, created_at, claimed_at, completed_at
 		FROM jobs WHERE id = $1
 	`, jobID).Scan(
 		&j.ID, &j.JobType, &j.ProjectID, &j.Payload, &j.Status,
-		&j.WorkerID, &j.Attempts, &j.MaxAttempts, &j.Error,
+		&j.WorkerID, &j.Attempts, &j.MaxAttempts, &j.Error, &j.ProgressData,
 		&j.CreatedAt, &j.ClaimedAt, &j.CompletedAt,
 	)
 	if err != nil {
@@ -98,12 +101,12 @@ func (q *Queue) GetJob(ctx context.Context, jobID string) (*model.Job, error) {
 func (q *Queue) GetLatestJobByType(ctx context.Context, projectID, jobType string) (*model.Job, error) {
 	var j model.Job
 	err := q.pool.QueryRow(ctx, `
-		SELECT id, job_type, project_id, payload, status, worker_id, attempts, max_attempts, error, created_at, claimed_at, completed_at
+		SELECT id, job_type, project_id, payload, status, worker_id, attempts, max_attempts, error, progress_data, created_at, claimed_at, completed_at
 		FROM jobs WHERE project_id = $1 AND job_type = $2
 		ORDER BY created_at DESC LIMIT 1
 	`, projectID, jobType).Scan(
 		&j.ID, &j.JobType, &j.ProjectID, &j.Payload, &j.Status,
-		&j.WorkerID, &j.Attempts, &j.MaxAttempts, &j.Error,
+		&j.WorkerID, &j.Attempts, &j.MaxAttempts, &j.Error, &j.ProgressData,
 		&j.CreatedAt, &j.ClaimedAt, &j.CompletedAt,
 	)
 	if err != nil {

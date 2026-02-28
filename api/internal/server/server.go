@@ -66,6 +66,8 @@ func New(cfg *config.Config, s *store.Store, st *storage.Storage, q *queue.Queue
 		api.GET("/projects/:id/dataset", datasetH.List)
 		api.PATCH("/projects/:id/dataset/:did", datasetH.Update)
 		api.DELETE("/projects/:id/dataset/:did", datasetH.Delete)
+		api.POST("/projects/:id/dataset/batch-delete", datasetH.BatchDelete)
+		api.GET("/projects/:id/dataset/stats", datasetH.Stats)
 
 		// Training
 		api.POST("/projects/:id/training", trainingH.Launch)
