@@ -84,6 +84,9 @@ func New(cfg *config.Config, s *store.Store, st *storage.Storage, q *queue.Queue
 		// Benchmark
 		api.POST("/projects/:id/benchmark", benchmarkH.Trigger)
 		api.GET("/projects/:id/benchmark", benchmarkH.List)
+
+		// Jobs (generic — works for any job type)
+		api.DELETE("/projects/:id/jobs/:jid", benchmarkH.Delete)
 	}
 
 	// Worker routes (no user auth — internal use)

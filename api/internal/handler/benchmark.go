@@ -50,6 +50,23 @@ func (h *BenchmarkHandler) Trigger(c *gin.Context) {
 	c.JSON(http.StatusCreated, job)
 }
 
+func (h *BenchmarkHandler) Delete(c *gin.Context) {
+	userID := middleware.GetUserID(c)
+	projectID := c.Param("id")
+	jobID := c.Param("jid")
+
+	if _, err := h.store.GetProject(c.Request.Context(), projectID, userID); err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "project not found"})
+		return
+	}
+
+	if err := h.store.DeleteJob(c.Request.Context(), jobID, projectID); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to delete job"})
+		return
+	}
+	c.Status(http.StatusNoContent)
+}
+
 func (h *BenchmarkHandler) List(c *gin.Context) {
 	userID := middleware.GetUserID(c)
 	projectID := c.Param("id")

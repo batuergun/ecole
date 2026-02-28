@@ -5,7 +5,14 @@ import { api, type Benchmark, type TrainingRun } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { BarChart3 } from "lucide-react";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { BarChart3, AlertTriangle, RotateCcw } from "lucide-react";
 
 interface BenchmarkResult {
   question: string;
@@ -17,9 +24,25 @@ interface BenchmarkResult {
   rouge_l: number | null;
 }
 
+function formatRunLabel(run: TrainingRun): string {
+  const name = run.base_model.split("/").pop() ?? run.base_model;
+  const loss = run.train_loss != null ? ` — Loss: ${run.train_loss.toFixed(4)}` : "";
+  return `${name}${loss}`;
+}
+
+function formatDate(dateStr: string): string {
+  return new Date(dateStr).toLocaleDateString(undefined, {
+    month: "short",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
 export function BenchmarkTab({ projectId }: { projectId: string }) {
   const queryClient = useQueryClient();
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [selectedRunId, setSelectedRunId] = useState<string | null>(null);
 
   const { data: benchmarks, isLoading } = useQuery({
     queryKey: ["benchmarks", projectId],
@@ -36,6 +59,7 @@ export function BenchmarkTab({ projectId }: { projectId: string }) {
     mutationFn: (runId: string) => api.triggerBenchmark(projectId, runId),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["benchmarks", projectId] });
+      setSelectedRunId(null);
       toast.success("Evaluation started");
     },
     onError: (err: Error) => {
@@ -45,11 +69,31 @@ export function BenchmarkTab({ projectId }: { projectId: string }) {
 
   const completedRuns = runs?.filter((r: TrainingRun) => r.status === "completed") ?? [];
   const pendingBenchmarks = benchmarks?.filter((b: Benchmark) => b.status === "pending" || b.status === "running") ?? [];
+  const failedBenchmarks = benchmarks?.filter((b: Benchmark) => b.status === "failed") ?? [];
   const hasAnyCompleted = benchmarks?.some((b: Benchmark) => b.status === "completed") ?? false;
 
-  // Find the most recent completed run that hasn't been evaluated yet
-  const evaluatedRunIds = new Set(benchmarks?.map((b: Benchmark) => b.training_run_id) ?? []);
-  const unevaluatedRuns = completedRuns.filter((r) => !evaluatedRunIds.has(r.id));
+  // Only count a run as "evaluated" if it has at least one successful benchmark
+  // Runs with only failed benchmarks should be retryable
+  const successfullyEvaluatedRunIds = new Set(
+    (benchmarks ?? [])
+      .filter((b: Benchmark) => b.status === "completed" || b.status === "pending" || b.status === "running")
+      .map((b) => b.training_run_id)
+  );
+  const unevaluatedRuns = completedRuns.filter((r) => !successfullyEvaluatedRunIds.has(r.id));
+
+  // Resolve which runs are available for selection
+  const availableRuns = hasAnyCompleted ? unevaluatedRuns : completedRuns;
+  const effectiveSelectedId = selectedRunId ?? (availableRuns.length === 1 ? availableRuns[0].id : null);
+  const selectedRun = availableRuns.find((r) => r.id === effectiveSelectedId);
+
+  // Find the run being evaluated (for pending state)
+  const pendingRunId = pendingBenchmarks[0]?.training_run_id;
+  const pendingRun = completedRuns.find((r) => r.id === pendingRunId);
+
+  // Find runs that failed evaluation (only failed, no successful benchmarks)
+  const failedRunIds = new Set(failedBenchmarks.map((b) => b.training_run_id));
+  const failedOnlyRunIds = [...failedRunIds].filter((id) => !successfullyEvaluatedRunIds.has(id));
+  const failedRun = failedOnlyRunIds.length > 0 ? completedRuns.find((r) => failedOnlyRunIds.includes(r.id)) : null;
 
   if (isLoading) {
     return <div className="h-32 animate-pulse bg-muted" />;
@@ -59,24 +103,48 @@ export function BenchmarkTab({ projectId }: { projectId: string }) {
   if (!hasAnyCompleted && pendingBenchmarks.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center py-12 text-center space-y-4">
-        <BarChart3 className="h-8 w-8 text-muted-foreground/40" />
-        <div className="space-y-1">
-          <p className="text-sm font-medium">
-            See how your model performs
-          </p>
-          <p className="text-xs text-muted-foreground max-w-xs">
-            Run an evaluation to compare your fine-tuned model against the base model and see the improvement.
-          </p>
-        </div>
-        {completedRuns.length > 0 && (
-          <Button
-            onClick={() => evaluateMutation.mutate(completedRuns[0].id)}
-            disabled={evaluateMutation.isPending}
-            className="bg-ecole-orange text-white hover:bg-ecole-orange-light"
-          >
-            <BarChart3 className="mr-2 h-4 w-4" />
-            {evaluateMutation.isPending ? "Starting..." : "Evaluate Model"}
-          </Button>
+        {failedRun ? (
+          <>
+            <AlertTriangle className="h-8 w-8 text-destructive/60" />
+            <div className="space-y-1">
+              <p className="text-sm font-medium">Evaluation failed</p>
+              <p className="text-xs text-muted-foreground max-w-xs">
+                The evaluation for {formatRunLabel(failedRun)} did not complete. You can retry it below.
+              </p>
+            </div>
+            <Button
+              onClick={() => evaluateMutation.mutate(failedRun.id)}
+              disabled={evaluateMutation.isPending}
+              className="bg-ecole-orange text-white hover:bg-ecole-orange-light"
+            >
+              <RotateCcw className="mr-2 h-4 w-4" />
+              {evaluateMutation.isPending ? "Starting..." : "Retry Evaluation"}
+            </Button>
+          </>
+        ) : (
+          <>
+            <BarChart3 className="h-8 w-8 text-muted-foreground/40" />
+            <div className="space-y-1">
+              <p className="text-sm font-medium">
+                See how your model performs
+              </p>
+              <p className="text-xs text-muted-foreground max-w-xs">
+                Run an evaluation to compare your fine-tuned model against the base model and see the improvement.
+              </p>
+            </div>
+            {availableRuns.length > 0 && (
+              <RunSelector
+                runs={availableRuns}
+                selectedRunId={effectiveSelectedId}
+                selectedRun={selectedRun}
+                onSelect={setSelectedRunId}
+                onEvaluate={() => {
+                  if (effectiveSelectedId) evaluateMutation.mutate(effectiveSelectedId);
+                }}
+                isPending={evaluateMutation.isPending}
+              />
+            )}
+          </>
         )}
       </div>
     );
@@ -96,7 +164,45 @@ export function BenchmarkTab({ projectId }: { projectId: string }) {
           <CardContent className="py-4">
             <div className="flex items-center gap-3">
               <div className="h-2 w-2 rounded-full bg-ecole-orange animate-pulse" />
-              <p className="text-sm font-mono">Evaluating model...</p>
+              <div className="text-sm font-mono">
+                <span>Evaluating</span>
+                {pendingRun && (
+                  <span className="text-muted-foreground">
+                    {" "}— {formatRunLabel(pendingRun)}
+                  </span>
+                )}
+              </div>
+            </div>
+            <p className="text-xs text-muted-foreground mt-1.5 ml-5">
+              Comparing base, fine-tuned, and teacher models on your eval set
+            </p>
+          </CardContent>
+        </Card>
+      )}
+
+      {failedRun && pendingBenchmarks.length === 0 && (
+        <Card className="border-destructive/30">
+          <CardContent className="py-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <AlertTriangle className="h-4 w-4 text-destructive/70" />
+                <div>
+                  <p className="text-sm font-mono">Evaluation failed</p>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    {formatRunLabel(failedRun)}
+                  </p>
+                </div>
+              </div>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => evaluateMutation.mutate(failedRun.id)}
+                disabled={evaluateMutation.isPending}
+                className="font-mono text-xs"
+              >
+                <RotateCcw className="mr-1.5 h-3.5 w-3.5" />
+                {evaluateMutation.isPending ? "Starting..." : "Retry"}
+              </Button>
             </div>
           </CardContent>
         </Card>
@@ -237,19 +343,87 @@ export function BenchmarkTab({ projectId }: { projectId: string }) {
 
       {/* Re-evaluate with a different run */}
       {hasAnyCompleted && unevaluatedRuns.length > 0 && pendingBenchmarks.length === 0 && (
-        <div className="pt-2 border-t border-border">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => evaluateMutation.mutate(unevaluatedRuns[0].id)}
-            disabled={evaluateMutation.isPending}
-            className="font-mono text-xs"
-          >
-            <BarChart3 className="mr-1.5 h-3.5 w-3.5" />
-            Evaluate Another Run
-          </Button>
+        <div className="pt-4 border-t border-border">
+          <p className="text-xs text-muted-foreground mb-3 font-mono">Evaluate another training run</p>
+          <RunSelector
+            runs={unevaluatedRuns}
+            selectedRunId={effectiveSelectedId}
+            selectedRun={selectedRun}
+            onSelect={setSelectedRunId}
+            onEvaluate={() => {
+              if (effectiveSelectedId) evaluateMutation.mutate(effectiveSelectedId);
+            }}
+            isPending={evaluateMutation.isPending}
+            compact
+          />
         </div>
       )}
+    </div>
+  );
+}
+
+function RunSelector({
+  runs,
+  selectedRunId,
+  selectedRun,
+  onSelect,
+  onEvaluate,
+  isPending,
+  compact,
+}: {
+  runs: TrainingRun[];
+  selectedRunId: string | null;
+  selectedRun: TrainingRun | undefined;
+  onSelect: (id: string) => void;
+  onEvaluate: () => void;
+  isPending: boolean;
+  compact?: boolean;
+}) {
+  const showSelect = runs.length > 1;
+
+  return (
+    <div className={`space-y-3 ${compact ? "" : "w-full max-w-sm"}`}>
+      {showSelect ? (
+        <Select value={selectedRunId ?? ""} onValueChange={onSelect}>
+          <SelectTrigger className={`font-mono text-xs ${compact ? "w-[280px]" : "w-full"}`}>
+            <SelectValue placeholder="Select a training run" />
+          </SelectTrigger>
+          <SelectContent>
+            {runs.map((run) => (
+              <SelectItem key={run.id} value={run.id} className="font-mono text-xs">
+                <div className="flex flex-col gap-0.5">
+                  <span>{formatRunLabel(run)}</span>
+                  <span className="text-muted-foreground">
+                    {formatDate(run.completed_at ?? run.created_at)}
+                  </span>
+                </div>
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      ) : selectedRun ? (
+        <div className={`flex items-center gap-2 text-xs font-mono text-muted-foreground ${compact ? "" : "justify-center"}`}>
+          <div className="h-1.5 w-1.5 rounded-full bg-green-500 shrink-0" />
+          <span>{formatRunLabel(selectedRun)}</span>
+          <span className="text-muted-foreground/60">
+            {formatDate(selectedRun.completed_at ?? selectedRun.created_at)}
+          </span>
+        </div>
+      ) : null}
+
+      <Button
+        onClick={onEvaluate}
+        disabled={isPending || !selectedRunId}
+        size={compact ? "sm" : "default"}
+        className={compact
+          ? "font-mono text-xs"
+          : "bg-ecole-orange text-white hover:bg-ecole-orange-light"
+        }
+        variant={compact ? "outline" : "default"}
+      >
+        <BarChart3 className={compact ? "mr-1.5 h-3.5 w-3.5" : "mr-2 h-4 w-4"} />
+        {isPending ? "Starting..." : "Evaluate Model"}
+      </Button>
     </div>
   );
 }

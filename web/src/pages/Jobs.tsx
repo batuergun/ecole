@@ -1,9 +1,10 @@
 import { useState, useEffect, useRef } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
 import { api, type ActivityTrainingRun, type ActivityJob } from "@/lib/api";
 import { Badge } from "@/components/ui/badge";
-import { Cloud, Monitor, ExternalLink, Clock, AlertCircle, Terminal, ChevronDown, ChevronRight } from "lucide-react";
+import { Cloud, Monitor, ExternalLink, Clock, AlertCircle, Terminal, ChevronDown, ChevronRight, Trash2 } from "lucide-react";
+import { toast } from "sonner";
 
 function formatStatus(s: string): string {
   return s.replace(/_/g, " ").replace(/^\w/, (c) => c.toUpperCase());
@@ -132,6 +133,27 @@ function StepProgress({ run }: { run: ActivityTrainingRun }) {
 export default function Jobs() {
   const [advancedMode, setAdvancedMode] = useState(false);
   const [expandedLogs, setExpandedLogs] = useState<Set<string>>(new Set());
+  const queryClient = useQueryClient();
+
+  const deleteTrainingMutation = useMutation({
+    mutationFn: ({ projectId, runId }: { projectId: string; runId: string }) =>
+      api.deleteTrainingRun(projectId, runId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["activity"] });
+      toast.success("Training run deleted");
+    },
+    onError: () => toast.error("Failed to delete training run"),
+  });
+
+  const deleteJobMutation = useMutation({
+    mutationFn: ({ projectId, jobId }: { projectId: string; jobId: string }) =>
+      api.deleteJob(projectId, jobId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["activity"] });
+      toast.success("Job deleted");
+    },
+    onError: () => toast.error("Failed to delete job"),
+  });
 
   const { data, isLoading } = useQuery({
     queryKey: ["activity"],
@@ -278,6 +300,15 @@ export default function Jobs() {
                       <Badge className={statusColor(run.status)}>
                         {formatStatus(run.status)}
                       </Badge>
+                      {(run.status === "completed" || run.status === "failed") && (
+                        <button
+                          onClick={() => deleteTrainingMutation.mutate({ projectId: run.project_id, runId: run.id })}
+                          disabled={deleteTrainingMutation.isPending}
+                          className="text-muted-foreground hover:text-destructive transition-colors disabled:opacity-50"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </button>
+                      )}
                     </div>
                   </div>
 
@@ -394,9 +425,20 @@ export default function Jobs() {
                       </div>
                     </div>
                   </div>
-                  <Badge className={statusColor(job.status)}>
-                    {formatStatus(job.status)}
-                  </Badge>
+                  <div className="flex items-center gap-3 shrink-0">
+                    <Badge className={statusColor(job.status)}>
+                      {formatStatus(job.status)}
+                    </Badge>
+                    {(job.status === "completed" || job.status === "failed") && (
+                      <button
+                        onClick={() => deleteJobMutation.mutate({ projectId: job.project_id, jobId: job.id })}
+                        disabled={deleteJobMutation.isPending}
+                        className="text-muted-foreground hover:text-destructive transition-colors disabled:opacity-50"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </button>
+                    )}
+                  </div>
                 </div>
 
                 {isActive && (

@@ -60,3 +60,8 @@ func (s *Store) FailBenchmark(ctx context.Context, id, errorMsg string) error {
 	`, id)
 	return err
 }
+
+func (s *Store) DeleteJob(ctx context.Context, id, projectID string) error {
+	_, err := s.pool.Exec(ctx, `DELETE FROM jobs WHERE id = $1 AND project_id = $2`, id, projectID)
+	return err
+}

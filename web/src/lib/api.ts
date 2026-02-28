@@ -105,6 +105,10 @@ export const api = {
   listBenchmarks: (projectId: string) =>
     request<Benchmark[]>(`/projects/${projectId}/benchmark`),
 
+  // Jobs
+  deleteJob: (projectId: string, jobId: string) =>
+    request(`/projects/${projectId}/jobs/${jobId}`, { method: "DELETE" }),
+
   // Activity
   getActivity: () => request<Activity>("/activity"),
 

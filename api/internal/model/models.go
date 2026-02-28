@@ -101,7 +101,7 @@ type Benchmark struct {
 	AvgScore           *float64        `json:"avg_score" db:"avg_score"`
 	SemanticSimilarity *float64        `json:"semantic_similarity" db:"semantic_similarity"`
 	RougeL             *float64        `json:"rouge_l" db:"rouge_l"`
-	TotalQuestions     int             `json:"total_questions" db:"total_questions"`
+	TotalQuestions     *int            `json:"total_questions" db:"total_questions"`
 	Status             string          `json:"status" db:"status"`
 	Results            json.RawMessage `json:"results" db:"results"`
 	CreatedAt          time.Time       `json:"created_at" db:"created_at"`
