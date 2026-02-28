@@ -12,10 +12,11 @@ func (s *Store) CreateBenchmark(ctx context.Context, trainingRunID, projectID, m
 	err := s.pool.QueryRow(ctx, `
 		INSERT INTO benchmarks (training_run_id, project_id, model_type, epoch)
 		VALUES ($1, $2, $3, $4)
-		RETURNING id, training_run_id, project_id, model_type, epoch, accuracy, avg_score, total_questions, status, results, created_at, completed_at
+		RETURNING id, training_run_id, project_id, model_type, epoch, accuracy, avg_score, semantic_similarity, rouge_l, total_questions, status, results, created_at, completed_at
 	`, trainingRunID, projectID, modelType, epoch).Scan(
 		&b.ID, &b.TrainingRunID, &b.ProjectID, &b.ModelType, &b.Epoch,
-		&b.Accuracy, &b.AvgScore, &b.TotalQuestions, &b.Status, &b.Results,
+		&b.Accuracy, &b.AvgScore, &b.SemanticSimilarity, &b.RougeL,
+		&b.TotalQuestions, &b.Status, &b.Results,
 		&b.CreatedAt, &b.CompletedAt,
 	)
 	if err != nil {
@@ -26,7 +27,7 @@ func (s *Store) CreateBenchmark(ctx context.Context, trainingRunID, projectID, m
 
 func (s *Store) ListBenchmarks(ctx context.Context, projectID string) ([]model.Benchmark, error) {
 	rows, err := s.pool.Query(ctx, `
-		SELECT id, training_run_id, project_id, model_type, epoch, accuracy, avg_score, total_questions, status, results, created_at, completed_at
+		SELECT id, training_run_id, project_id, model_type, epoch, accuracy, avg_score, semantic_similarity, rouge_l, total_questions, status, results, created_at, completed_at
 		FROM benchmarks WHERE project_id = $1 ORDER BY created_at DESC
 	`, projectID)
 	if err != nil {
@@ -37,7 +38,7 @@ func (s *Store) ListBenchmarks(ctx context.Context, projectID string) ([]model.B
 	var benchmarks []model.Benchmark
 	for rows.Next() {
 		var b model.Benchmark
-		if err := rows.Scan(&b.ID, &b.TrainingRunID, &b.ProjectID, &b.ModelType, &b.Epoch, &b.Accuracy, &b.AvgScore, &b.TotalQuestions, &b.Status, &b.Results, &b.CreatedAt, &b.CompletedAt); err != nil {
+		if err := rows.Scan(&b.ID, &b.TrainingRunID, &b.ProjectID, &b.ModelType, &b.Epoch, &b.Accuracy, &b.AvgScore, &b.SemanticSimilarity, &b.RougeL, &b.TotalQuestions, &b.Status, &b.Results, &b.CreatedAt, &b.CompletedAt); err != nil {
 			return nil, err
 		}
 		benchmarks = append(benchmarks, b)
@@ -45,11 +46,11 @@ func (s *Store) ListBenchmarks(ctx context.Context, projectID string) ([]model.B
 	return benchmarks, nil
 }
 
-func (s *Store) CompleteBenchmark(ctx context.Context, id string, accuracy, avgScore float64, totalQuestions int, results json.RawMessage) error {
+func (s *Store) CompleteBenchmark(ctx context.Context, id string, accuracy, avgScore float64, semanticSimilarity, rougeL *float64, totalQuestions int, results json.RawMessage) error {
 	_, err := s.pool.Exec(ctx, `
-		UPDATE benchmarks SET status = 'completed', accuracy = $2, avg_score = $3, total_questions = $4, results = $5, completed_at = NOW()
+		UPDATE benchmarks SET status = 'completed', accuracy = $2, avg_score = $3, semantic_similarity = $4, rouge_l = $5, total_questions = $6, results = $7, completed_at = NOW()
 		WHERE id = $1
-	`, id, accuracy, avgScore, totalQuestions, results)
+	`, id, accuracy, avgScore, semanticSimilarity, rougeL, totalQuestions, results)
 	return err
 }
 

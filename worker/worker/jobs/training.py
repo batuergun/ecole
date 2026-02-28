@@ -272,7 +272,7 @@ def _run_local(
         logging_steps=logging_steps,
         bf16=use_bf16,
         save_strategy="epoch",
-        save_total_limit=2,
+        save_total_limit=num_epochs,
         report_to="none",
         remove_unused_columns=False,
     )

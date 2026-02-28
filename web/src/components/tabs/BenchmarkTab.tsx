@@ -10,6 +10,8 @@ interface BenchmarkResult {
   answer: string;
   score: number;
   reason: string;
+  semantic_similarity: number | null;
+  rouge_l: number | null;
 }
 
 export function BenchmarkTab({ projectId }: { projectId: string }) {
@@ -36,7 +38,11 @@ export function BenchmarkTab({ projectId }: { projectId: string }) {
   }
 
   const baseBenchmark = benchmarks.find((b: Benchmark) => b.model_type === "base" && b.status === "completed");
-  const ftBenchmark = benchmarks.find((b: Benchmark) => b.model_type === "finetuned" && b.status === "completed");
+  const ftBenchmark = benchmarks.find((b: Benchmark) => b.model_type === "finetuned" && b.epoch == null && b.status === "completed");
+  const teacherBenchmark = benchmarks.find((b: Benchmark) => b.model_type === "teacher" && b.status === "completed");
+  const epochBenchmarks = benchmarks
+    .filter((b: Benchmark) => b.model_type === "finetuned" && b.epoch != null && b.status === "completed")
+    .sort((a, b) => (a.epoch ?? 0) - (b.epoch ?? 0));
   const pendingBenchmarks = benchmarks.filter((b: Benchmark) => b.status === "pending" || b.status === "running");
 
   return (
@@ -52,7 +58,7 @@ export function BenchmarkTab({ projectId }: { projectId: string }) {
         </Card>
       )}
 
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
         <ScoreCard
           title="Base Model"
           benchmark={baseBenchmark}
@@ -68,7 +74,55 @@ export function BenchmarkTab({ projectId }: { projectId: string }) {
               : undefined
           }
         />
+        <ScoreCard
+          title="Teacher Model"
+          benchmark={teacherBenchmark}
+          isHighlighted={false}
+        />
       </div>
+
+      {/* Per-epoch learning curve */}
+      {epochBenchmarks.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-sm font-mono tracking-wide text-muted-foreground">
+              Learning Curve — Per-Epoch
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b text-left text-muted-foreground">
+                    <th className="py-2 pr-4 font-mono font-medium">Epoch</th>
+                    <th className="py-2 pr-4 font-mono font-medium">Avg Score</th>
+                    <th className="py-2 pr-4 font-mono font-medium">Accuracy</th>
+                    <th className="py-2 pr-4 font-mono font-medium">Sem. Sim.</th>
+                    <th className="py-2 font-mono font-medium">ROUGE-L</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {epochBenchmarks.map((b) => (
+                    <tr key={b.id} className="border-b last:border-0">
+                      <td className="py-2 pr-4 font-mono">{b.epoch}</td>
+                      <td className="py-2 pr-4 font-mono">{b.avg_score?.toFixed(2) ?? "—"}</td>
+                      <td className="py-2 pr-4 font-mono">
+                        {b.accuracy != null ? `${(b.accuracy * 100).toFixed(1)}%` : "—"}
+                      </td>
+                      <td className="py-2 pr-4 font-mono">
+                        {b.semantic_similarity != null ? b.semantic_similarity.toFixed(3) : "—"}
+                      </td>
+                      <td className="py-2 font-mono">
+                        {b.rouge_l != null ? b.rouge_l.toFixed(3) : "—"}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Per-question results */}
       {benchmarks
@@ -80,7 +134,8 @@ export function BenchmarkTab({ projectId }: { projectId: string }) {
               className="w-full text-left"
             >
               <h3 className="text-sm font-mono tracking-wide text-muted-foreground mb-2 hover:text-foreground transition-colors">
-                {b.model_type === "base" ? "Base" : "Fine-tuned"} — Per-Question Results
+                {modelTypeLabel(b)} — Per-Question Results
+                {b.epoch != null && ` (Epoch ${b.epoch})`}
                 <span className="ml-2 text-xs">
                   {expandedId === b.id ? "[-]" : "[+]"}
                 </span>
@@ -110,6 +165,16 @@ export function BenchmarkTab({ projectId }: { projectId: string }) {
                         >
                           {r.score}/5
                         </Badge>
+                        {r.semantic_similarity != null && (
+                          <Badge variant="outline" className="text-xs">
+                            Sim {r.semantic_similarity.toFixed(2)}
+                          </Badge>
+                        )}
+                        {r.rouge_l != null && (
+                          <Badge variant="outline" className="text-xs">
+                            RL {r.rouge_l.toFixed(2)}
+                          </Badge>
+                        )}
                       </div>
                     </div>
                     {r.reason && (
@@ -123,6 +188,12 @@ export function BenchmarkTab({ projectId }: { projectId: string }) {
         ))}
     </div>
   );
+}
+
+function modelTypeLabel(b: Benchmark): string {
+  if (b.model_type === "base") return "Base";
+  if (b.model_type === "teacher") return "Teacher";
+  return "Fine-tuned";
 }
 
 function ScoreCard({
@@ -159,6 +230,18 @@ function ScoreCard({
               <span className="text-sm">Accuracy (4+/5)</span>
               <span className="font-mono">
                 {benchmark.accuracy != null ? `${(benchmark.accuracy * 100).toFixed(1)}%` : "—"}
+              </span>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-sm">Semantic Sim.</span>
+              <span className="font-mono">
+                {benchmark.semantic_similarity != null ? benchmark.semantic_similarity.toFixed(3) : "—"}
+              </span>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-sm">ROUGE-L</span>
+              <span className="font-mono">
+                {benchmark.rouge_l != null ? benchmark.rouge_l.toFixed(3) : "—"}
               </span>
             </div>
             <div className="flex items-center justify-between">

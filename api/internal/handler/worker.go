@@ -343,16 +343,18 @@ func (h *WorkerHandler) CreateBenchmarkRecord(c *gin.Context) {
 func (h *WorkerHandler) CompleteBenchmarkRecord(c *gin.Context) {
 	bid := c.Param("bid")
 	var req struct {
-		Accuracy       float64         `json:"accuracy"`
-		AvgScore       float64         `json:"avg_score"`
-		TotalQuestions int             `json:"total_questions"`
-		Results        json.RawMessage `json:"results"`
+		Accuracy           float64         `json:"accuracy"`
+		AvgScore           float64         `json:"avg_score"`
+		SemanticSimilarity *float64        `json:"semantic_similarity"`
+		RougeL             *float64        `json:"rouge_l"`
+		TotalQuestions     int             `json:"total_questions"`
+		Results            json.RawMessage `json:"results"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	if err := h.store.CompleteBenchmark(c.Request.Context(), bid, req.Accuracy, req.AvgScore, req.TotalQuestions, req.Results); err != nil {
+	if err := h.store.CompleteBenchmark(c.Request.Context(), bid, req.Accuracy, req.AvgScore, req.SemanticSimilarity, req.RougeL, req.TotalQuestions, req.Results); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to complete benchmark"})
 		return
 	}

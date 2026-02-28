@@ -82,6 +82,18 @@ class LLMClient:
         return LLMResponse(text=response.choices[0].message.content)
 
 
+    def answer_question(self, question: str, max_tokens: int = 2048) -> str:
+        """Generate an answer to a question using the LLM."""
+        system = "You are a knowledgeable assistant. Answer the question accurately and concisely."
+        content_blocks = [{"type": "text", "text": question}]
+        response = self.generate(
+            system=system,
+            content_blocks=content_blocks,
+            max_tokens=max_tokens,
+        )
+        return response.text
+
+
 def create_llm_client(provider: str, keys: dict) -> LLMClient:
     """Factory: create an LLMClient for the given provider."""
     if provider == "mistral":

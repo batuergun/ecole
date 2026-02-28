@@ -87,18 +87,20 @@ type TrainingRun struct {
 }
 
 type Benchmark struct {
-	ID             string          `json:"id" db:"id"`
-	TrainingRunID  string          `json:"training_run_id" db:"training_run_id"`
-	ProjectID      string          `json:"project_id" db:"project_id"`
-	ModelType      string          `json:"model_type" db:"model_type"`
-	Epoch          *int            `json:"epoch" db:"epoch"`
-	Accuracy       *float64        `json:"accuracy" db:"accuracy"`
-	AvgScore       *float64        `json:"avg_score" db:"avg_score"`
-	TotalQuestions int             `json:"total_questions" db:"total_questions"`
-	Status         string          `json:"status" db:"status"`
-	Results        json.RawMessage `json:"results" db:"results"`
-	CreatedAt      time.Time       `json:"created_at" db:"created_at"`
-	CompletedAt    *time.Time      `json:"completed_at" db:"completed_at"`
+	ID                 string          `json:"id" db:"id"`
+	TrainingRunID      string          `json:"training_run_id" db:"training_run_id"`
+	ProjectID          string          `json:"project_id" db:"project_id"`
+	ModelType          string          `json:"model_type" db:"model_type"`
+	Epoch              *int            `json:"epoch" db:"epoch"`
+	Accuracy           *float64        `json:"accuracy" db:"accuracy"`
+	AvgScore           *float64        `json:"avg_score" db:"avg_score"`
+	SemanticSimilarity *float64        `json:"semantic_similarity" db:"semantic_similarity"`
+	RougeL             *float64        `json:"rouge_l" db:"rouge_l"`
+	TotalQuestions     int             `json:"total_questions" db:"total_questions"`
+	Status             string          `json:"status" db:"status"`
+	Results            json.RawMessage `json:"results" db:"results"`
+	CreatedAt          time.Time       `json:"created_at" db:"created_at"`
+	CompletedAt        *time.Time      `json:"completed_at" db:"completed_at"`
 }
 
 type Job struct {

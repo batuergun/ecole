@@ -195,6 +195,8 @@ export interface Benchmark {
   epoch: number | null;
   accuracy: number | null;
   avg_score: number | null;
+  semantic_similarity: number | null;
+  rouge_l: number | null;
   total_questions: number;
   status: string;
   results: unknown[];

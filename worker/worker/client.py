@@ -155,14 +155,28 @@ class APIClient:
         resp.raise_for_status()
         return resp.json()
 
-    def complete_benchmark(self, benchmark_id: str, accuracy: float, avg_score: float, total_questions: int, results: list[dict]) -> None:
+    def complete_benchmark(
+        self,
+        benchmark_id: str,
+        accuracy: float,
+        avg_score: float,
+        total_questions: int,
+        results: list[dict],
+        semantic_similarity: float | None = None,
+        rouge_l: float | None = None,
+    ) -> None:
+        body: dict = {
+            "accuracy": accuracy,
+            "avg_score": avg_score,
+            "total_questions": total_questions,
+            "results": results,
+        }
+        if semantic_similarity is not None:
+            body["semantic_similarity"] = semantic_similarity
+        if rouge_l is not None:
+            body["rouge_l"] = rouge_l
         self.http.post(
             f"{self.api_url}/api/worker/benchmarks/{benchmark_id}/complete",
-            json={
-                "accuracy": accuracy,
-                "avg_score": avg_score,
-                "total_questions": total_questions,
-                "results": results,
-            },
+            json=body,
             timeout=120,
         )

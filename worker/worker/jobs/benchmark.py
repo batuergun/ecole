@@ -1,13 +1,15 @@
-"""Auto-benchmark: evaluate base and fine-tuned models using LLM-as-judge."""
+"""Auto-benchmark: evaluate base, per-epoch fine-tuned, teacher, and final fine-tuned models."""
 
 import json
 import os
+import re
 
 import torch
 from peft import PeftModel
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
 from worker.client import APIClient
+from worker.jobs.metrics import compute_metrics
 from worker.llm import LLMClient, create_llm_client
 
 
@@ -82,7 +84,7 @@ def run(client: APIClient, job: dict) -> None:
 
     print(f"[benchmark] {len(eval_items)} eval questions")
 
-    # --- Base model evaluation ---
+    # --- 1. Base model evaluation ---
     print(f"[benchmark] Evaluating base model: {base_model}")
     base_benchmark = client.create_benchmark(
         training_run_id=training_run_id,
@@ -102,32 +104,169 @@ def run(client: APIClient, job: dict) -> None:
 
     _save_benchmark(client, base_benchmark["id"], base_results)
 
-    # --- Fine-tuned model evaluation ---
-    if adapter_path and os.path.exists(adapter_path):
-        print(f"[benchmark] Evaluating fine-tuned model: {base_model} + {adapter_path}")
-        ft_benchmark = client.create_benchmark(
-            training_run_id=training_run_id,
-            project_id=project_id,
-            model_type="finetuned",
-        )
-
-        ft_results = _evaluate_model(
+    # --- 2. Per-epoch fine-tuned + final adapter evaluation ---
+    if adapter_path:
+        _evaluate_per_epoch(
+            client=client,
             llm=llm,
-            model_name=base_model,
+            base_model=base_model,
             adapter_path=adapter_path,
             eval_items=eval_items,
-            client=client,
-            job_id=job["id"],
-            label="finetuned",
+            job=job,
+            training_run_id=training_run_id,
+            project_id=project_id,
         )
 
-        _save_benchmark(client, ft_benchmark["id"], ft_results)
+        # Final adapter evaluation (epoch=null)
+        if os.path.exists(adapter_path):
+            print(f"[benchmark] Evaluating final fine-tuned model: {base_model} + {adapter_path}")
+            ft_benchmark = client.create_benchmark(
+                training_run_id=training_run_id,
+                project_id=project_id,
+                model_type="finetuned",
+            )
+
+            ft_results = _evaluate_model(
+                llm=llm,
+                model_name=base_model,
+                adapter_path=adapter_path,
+                eval_items=eval_items,
+                client=client,
+                job_id=job["id"],
+                label="finetuned",
+            )
+
+            _save_benchmark(client, ft_benchmark["id"], ft_results)
+        else:
+            print(f"[benchmark] Skipping fine-tuned eval (no adapter at {adapter_path})")
     else:
-        print(f"[benchmark] Skipping fine-tuned eval (no adapter at {adapter_path})")
+        print("[benchmark] Skipping fine-tuned eval (no adapter path)")
+
+    # --- 3. Teacher model evaluation ---
+    print(f"[benchmark] Evaluating teacher model ({provider})")
+    _evaluate_teacher(
+        client=client,
+        llm=llm,
+        eval_items=eval_items,
+        job=job,
+        training_run_id=training_run_id,
+        project_id=project_id,
+    )
 
     # Update project status
     client.update_project_status(project_id, "benchmarked")
     print(f"[benchmark] Done for {training_run_id}")
+
+
+def _evaluate_per_epoch(
+    client: APIClient,
+    llm: LLMClient,
+    base_model: str,
+    adapter_path: str,
+    eval_items: list[dict],
+    job: dict,
+    training_run_id: str,
+    project_id: str,
+) -> None:
+    """Discover per-epoch checkpoint dirs and evaluate each."""
+    # Checkpoints are in the parent directory of the final adapter
+    parent_dir = os.path.dirname(adapter_path)
+    if not os.path.isdir(parent_dir):
+        print(f"[benchmark] No parent dir for checkpoints: {parent_dir}")
+        return
+
+    # Find checkpoint-* directories, sorted by epoch number
+    checkpoint_dirs = []
+    for name in os.listdir(parent_dir):
+        match = re.match(r"checkpoint-(\d+)", name)
+        if match:
+            checkpoint_path = os.path.join(parent_dir, name)
+            if os.path.isdir(checkpoint_path):
+                checkpoint_dirs.append((int(match.group(1)), checkpoint_path))
+
+    checkpoint_dirs.sort(key=lambda x: x[0])
+
+    if not checkpoint_dirs:
+        print("[benchmark] No epoch checkpoints found, skipping per-epoch eval")
+        return
+
+    print(f"[benchmark] Found {len(checkpoint_dirs)} epoch checkpoints")
+
+    for epoch_idx, (step, ckpt_path) in enumerate(checkpoint_dirs, start=1):
+        print(f"[benchmark] Evaluating epoch {epoch_idx} checkpoint: {ckpt_path}")
+        epoch_benchmark = client.create_benchmark(
+            training_run_id=training_run_id,
+            project_id=project_id,
+            model_type="finetuned",
+            epoch=epoch_idx,
+        )
+
+        epoch_results = _evaluate_model(
+            llm=llm,
+            model_name=base_model,
+            adapter_path=ckpt_path,
+            eval_items=eval_items,
+            client=client,
+            job_id=job["id"],
+            label=f"finetuned-epoch-{epoch_idx}",
+        )
+
+        _save_benchmark(client, epoch_benchmark["id"], epoch_results)
+
+
+def _evaluate_teacher(
+    client: APIClient,
+    llm: LLMClient,
+    eval_items: list[dict],
+    job: dict,
+    training_run_id: str,
+    project_id: str,
+) -> None:
+    """Evaluate the teacher LLM (Claude/Mistral) on the eval set."""
+    teacher_benchmark = client.create_benchmark(
+        training_run_id=training_run_id,
+        project_id=project_id,
+        model_type="teacher",
+    )
+
+    results = []
+    for i, item in enumerate(eval_items):
+        question = item["question"]
+        expected = item["answer"]
+
+        # Generate answer from teacher LLM
+        try:
+            answer = llm.answer_question(question)
+        except Exception as e:
+            print(f"[benchmark] Teacher answer error: {e}")
+            answer = f"Error: {e}"
+
+        # Score with LLM judge
+        score_data = _judge_answer(llm, question, expected, answer)
+
+        # Compute deterministic metrics
+        metrics = compute_metrics(answer, expected)
+
+        results.append({
+            "question": question,
+            "expected": expected,
+            "answer": answer,
+            "score": score_data.get("score", 0),
+            "reason": score_data.get("reason", ""),
+            "semantic_similarity": metrics["semantic_similarity"],
+            "rouge_l": metrics["rouge_l"],
+        })
+
+        if (i + 1) % 5 == 0 or i == len(eval_items) - 1:
+            client.report_progress(job["id"], {
+                "status": "running",
+                "label": "teacher",
+                "evaluated": i + 1,
+                "total": len(eval_items),
+            })
+            print(f"[benchmark] teacher: {i + 1}/{len(eval_items)}")
+
+    _save_benchmark(client, teacher_benchmark["id"], results)
 
 
 def _evaluate_model(
@@ -169,12 +308,17 @@ def _evaluate_model(
         # Score with LLM judge
         score_data = _judge_answer(llm, question, expected, answer)
 
+        # Compute deterministic metrics
+        metrics = compute_metrics(answer, expected)
+
         results.append({
             "question": question,
             "expected": expected,
             "answer": answer,
             "score": score_data.get("score", 0),
             "reason": score_data.get("reason", ""),
+            "semantic_similarity": metrics["semantic_similarity"],
+            "rouge_l": metrics["rouge_l"],
         })
 
         if (i + 1) % 5 == 0 or i == len(eval_items) - 1:
@@ -271,12 +415,23 @@ def _save_benchmark(client: APIClient, benchmark_id: str, results: list[dict]) -
     accurate = sum(1 for s in scores if s >= 4)
     accuracy = accurate / total if total > 0 else 0.0
 
+    # Aggregate deterministic metrics
+    sim_scores = [r["semantic_similarity"] for r in results if r.get("semantic_similarity") is not None]
+    rouge_scores = [r["rouge_l"] for r in results if r.get("rouge_l") is not None]
+
+    avg_semantic_similarity = sum(sim_scores) / len(sim_scores) if sim_scores else None
+    avg_rouge_l = sum(rouge_scores) / len(rouge_scores) if rouge_scores else None
+
     client.complete_benchmark(
         benchmark_id=benchmark_id,
         accuracy=accuracy,
         avg_score=avg_score,
         total_questions=total,
         results=results,
+        semantic_similarity=avg_semantic_similarity,
+        rouge_l=avg_rouge_l,
     )
 
-    print(f"[benchmark] Saved: avg_score={avg_score:.2f}, accuracy={accuracy:.2%}, n={total}")
+    sim_str = f"{avg_semantic_similarity:.3f}" if avg_semantic_similarity is not None else "n/a"
+    rouge_str = f"{avg_rouge_l:.3f}" if avg_rouge_l is not None else "n/a"
+    print(f"[benchmark] Saved: avg_score={avg_score:.2f}, accuracy={accuracy:.2%}, sem_sim={sim_str}, rouge_l={rouge_str}, n={total}")
