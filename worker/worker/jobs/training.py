@@ -150,6 +150,7 @@ def _run_hf_jobs(
     hf_api.create_repo(dataset_repo, repo_type="dataset", exist_ok=True, private=True)
     dataset.push_to_hub(dataset_repo, token=hf_token, private=True)
     print(f"[training:hf_jobs] Dataset pushed to {dataset_repo}")
+    client.set_hf_dataset_repo(training_run_id, dataset_repo)
 
     # Select GPU flavor — use explicit choice from run_info, fall back to model default
     flavor = run_info.get("hf_flavor") or DEFAULT_HF_FLAVORS.get(base_model, "a10g-small")

@@ -162,6 +162,12 @@ class APIClient:
             json={"job_id": job_id},
         )
 
+    def set_hf_dataset_repo(self, training_run_id: str, repo_id: str) -> None:
+        self.http.post(
+            f"{self.api_url}/api/worker/training-runs/{training_run_id}/hf-dataset-repo",
+            json={"repo_id": repo_id},
+        )
+
     def set_training_hf_repo(self, training_run_id: str, repo_id: str) -> None:
         self.http.post(
             f"{self.api_url}/api/worker/training-runs/{training_run_id}/hf-repo",

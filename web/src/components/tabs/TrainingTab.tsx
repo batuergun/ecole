@@ -401,17 +401,32 @@ export function TrainingTab({ projectId }: { projectId: string }) {
                   );
                 })()}
 
-                {/* HF Job link for running HF jobs */}
-                {isActive && run.compute_mode === "hf_jobs" && run.hf_job_id && (
-                  <a
-                    href={run.hf_job_id}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="mt-2 inline-flex items-center gap-1 text-xs text-ecole-orange hover:underline font-mono"
-                  >
-                    <ExternalLink className="h-3 w-3" />
-                    View job on HuggingFace
-                  </a>
+                {/* HF Job + Dataset links for HF jobs */}
+                {run.compute_mode === "hf_jobs" && (run.hf_job_id || run.hf_dataset_repo) && (
+                  <div className="mt-2 flex items-center gap-3">
+                    {isActive && run.hf_job_id && (
+                      <a
+                        href={run.hf_job_id}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1 text-xs text-ecole-orange hover:underline font-mono"
+                      >
+                        <ExternalLink className="h-3 w-3" />
+                        View job on HuggingFace
+                      </a>
+                    )}
+                    {run.hf_dataset_repo && (
+                      <a
+                        href={`https://huggingface.co/datasets/${run.hf_dataset_repo}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1 text-xs text-ecole-orange hover:underline font-mono"
+                      >
+                        <ExternalLink className="h-3 w-3" />
+                        View dataset on HuggingFace
+                      </a>
+                    )}
+                  </div>
                 )}
 
                 {isFailed && run.error_message && (

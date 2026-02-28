@@ -13,12 +13,12 @@ func (s *Store) CreateTrainingRun(ctx context.Context, projectID, baseModel, com
 		INSERT INTO training_runs (project_id, base_model, lora_config, training_config, compute_mode, hf_flavor, hf_namespace)
 		VALUES ($1, $2, $3, $4, $5, $6, $7)
 		RETURNING id, project_id, base_model, lora_config, training_config, compute_mode, hf_flavor, hf_namespace,
-			hf_job_id, worker_id, status, current_epoch, total_epochs, train_loss,
+			hf_job_id, hf_dataset_repo, worker_id, status, current_epoch, total_epochs, train_loss,
 			current_step, total_steps, grad_norm, learning_rate_current,
 			output_model_path, hf_repo_id, error_message, started_at, completed_at, created_at, updated_at
 	`, projectID, baseModel, loraConfig, trainingConfig, computeMode, hfFlavor, hfNamespace).Scan(
 		&t.ID, &t.ProjectID, &t.BaseModel, &t.LoRAConfig, &t.TrainingConfig, &t.ComputeMode, &t.HFFlavor, &t.HFNamespace,
-		&t.HFJobID, &t.WorkerID, &t.Status, &t.CurrentEpoch, &t.TotalEpochs, &t.TrainLoss,
+		&t.HFJobID, &t.HFDatasetRepo, &t.WorkerID, &t.Status, &t.CurrentEpoch, &t.TotalEpochs, &t.TrainLoss,
 		&t.CurrentStep, &t.TotalSteps, &t.GradNorm, &t.LearningRateCur,
 		&t.OutputModelPath, &t.HFRepoID, &t.ErrorMessage, &t.StartedAt, &t.CompletedAt, &t.CreatedAt, &t.UpdatedAt,
 	)
@@ -32,13 +32,13 @@ func (s *Store) GetTrainingRunByID(ctx context.Context, id string) (*model.Train
 	var t model.TrainingRun
 	err := s.pool.QueryRow(ctx, `
 		SELECT id, project_id, base_model, lora_config, training_config, compute_mode, hf_flavor, hf_namespace,
-			hf_job_id, worker_id, status, current_epoch, total_epochs, train_loss,
+			hf_job_id, hf_dataset_repo, worker_id, status, current_epoch, total_epochs, train_loss,
 			current_step, total_steps, grad_norm, learning_rate_current,
 			output_model_path, hf_repo_id, error_message, started_at, completed_at, created_at, updated_at
 		FROM training_runs WHERE id = $1
 	`, id).Scan(
 		&t.ID, &t.ProjectID, &t.BaseModel, &t.LoRAConfig, &t.TrainingConfig, &t.ComputeMode, &t.HFFlavor, &t.HFNamespace,
-		&t.HFJobID, &t.WorkerID, &t.Status, &t.CurrentEpoch, &t.TotalEpochs, &t.TrainLoss,
+		&t.HFJobID, &t.HFDatasetRepo, &t.WorkerID, &t.Status, &t.CurrentEpoch, &t.TotalEpochs, &t.TrainLoss,
 		&t.CurrentStep, &t.TotalSteps, &t.GradNorm, &t.LearningRateCur,
 		&t.OutputModelPath, &t.HFRepoID, &t.ErrorMessage, &t.StartedAt, &t.CompletedAt, &t.CreatedAt, &t.UpdatedAt,
 	)
@@ -52,13 +52,13 @@ func (s *Store) GetTrainingRun(ctx context.Context, id, projectID string) (*mode
 	var t model.TrainingRun
 	err := s.pool.QueryRow(ctx, `
 		SELECT id, project_id, base_model, lora_config, training_config, compute_mode, hf_flavor, hf_namespace,
-			hf_job_id, worker_id, status, current_epoch, total_epochs, train_loss,
+			hf_job_id, hf_dataset_repo, worker_id, status, current_epoch, total_epochs, train_loss,
 			current_step, total_steps, grad_norm, learning_rate_current,
 			output_model_path, hf_repo_id, error_message, started_at, completed_at, created_at, updated_at
 		FROM training_runs WHERE id = $1 AND project_id = $2
 	`, id, projectID).Scan(
 		&t.ID, &t.ProjectID, &t.BaseModel, &t.LoRAConfig, &t.TrainingConfig, &t.ComputeMode, &t.HFFlavor, &t.HFNamespace,
-		&t.HFJobID, &t.WorkerID, &t.Status, &t.CurrentEpoch, &t.TotalEpochs, &t.TrainLoss,
+		&t.HFJobID, &t.HFDatasetRepo, &t.WorkerID, &t.Status, &t.CurrentEpoch, &t.TotalEpochs, &t.TrainLoss,
 		&t.CurrentStep, &t.TotalSteps, &t.GradNorm, &t.LearningRateCur,
 		&t.OutputModelPath, &t.HFRepoID, &t.ErrorMessage, &t.StartedAt, &t.CompletedAt, &t.CreatedAt, &t.UpdatedAt,
 	)
@@ -71,7 +71,7 @@ func (s *Store) GetTrainingRun(ctx context.Context, id, projectID string) (*mode
 func (s *Store) ListTrainingRuns(ctx context.Context, projectID string) ([]model.TrainingRun, error) {
 	rows, err := s.pool.Query(ctx, `
 		SELECT id, project_id, base_model, lora_config, training_config, compute_mode, hf_flavor, hf_namespace,
-			hf_job_id, worker_id, status, current_epoch, total_epochs, train_loss,
+			hf_job_id, hf_dataset_repo, worker_id, status, current_epoch, total_epochs, train_loss,
 			current_step, total_steps, grad_norm, learning_rate_current,
 			output_model_path, hf_repo_id, error_message, started_at, completed_at, created_at, updated_at
 		FROM training_runs WHERE project_id = $1 ORDER BY created_at DESC
@@ -86,7 +86,7 @@ func (s *Store) ListTrainingRuns(ctx context.Context, projectID string) ([]model
 		var t model.TrainingRun
 		if err := rows.Scan(
 			&t.ID, &t.ProjectID, &t.BaseModel, &t.LoRAConfig, &t.TrainingConfig, &t.ComputeMode, &t.HFFlavor, &t.HFNamespace,
-			&t.HFJobID, &t.WorkerID, &t.Status, &t.CurrentEpoch, &t.TotalEpochs, &t.TrainLoss,
+			&t.HFJobID, &t.HFDatasetRepo, &t.WorkerID, &t.Status, &t.CurrentEpoch, &t.TotalEpochs, &t.TrainLoss,
 			&t.CurrentStep, &t.TotalSteps, &t.GradNorm, &t.LearningRateCur,
 			&t.OutputModelPath, &t.HFRepoID, &t.ErrorMessage, &t.StartedAt, &t.CompletedAt, &t.CreatedAt, &t.UpdatedAt,
 		); err != nil {
@@ -143,6 +143,11 @@ func (s *Store) SetTrainingHFRepo(ctx context.Context, id, repoID string) error 
 
 func (s *Store) SetHFJobID(ctx context.Context, id, jobID string) error {
 	_, err := s.pool.Exec(ctx, `UPDATE training_runs SET hf_job_id = $2, updated_at = NOW() WHERE id = $1`, id, jobID)
+	return err
+}
+
+func (s *Store) SetHFDatasetRepo(ctx context.Context, id, repoID string) error {
+	_, err := s.pool.Exec(ctx, `UPDATE training_runs SET hf_dataset_repo = $2, updated_at = NOW() WHERE id = $1`, id, repoID)
 	return err
 }
 

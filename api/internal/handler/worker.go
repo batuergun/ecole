@@ -338,6 +338,23 @@ func (h *WorkerHandler) SetHFJobID(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"ok": true})
 }
 
+// SetHFDatasetRepo stores the HuggingFace dataset repo on a training run.
+func (h *WorkerHandler) SetHFDatasetRepo(c *gin.Context) {
+	tid := c.Param("tid")
+	var req struct {
+		RepoID string `json:"repo_id" binding:"required"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	if err := h.store.SetHFDatasetRepo(c.Request.Context(), tid, req.RepoID); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to set HF dataset repo"})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"ok": true})
+}
+
 // SetTrainingHFRepo sets the HF repo ID on a training run.
 func (h *WorkerHandler) SetTrainingHFRepo(c *gin.Context) {
 	tid := c.Param("tid")

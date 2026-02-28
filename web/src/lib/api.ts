@@ -174,6 +174,7 @@ export interface TrainingRun {
   compute_mode: string;
   hf_namespace: string | null;
   hf_job_id: string | null;
+  hf_dataset_repo: string | null;
   status: string;
   current_epoch: number;
   total_epochs: number | null;

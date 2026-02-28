@@ -72,6 +72,7 @@ type TrainingRun struct {
 	HFFlavor        *string         `json:"hf_flavor" db:"hf_flavor"`
 	HFNamespace     *string         `json:"hf_namespace" db:"hf_namespace"`
 	HFJobID         *string         `json:"hf_job_id" db:"hf_job_id"`
+	HFDatasetRepo   *string         `json:"hf_dataset_repo" db:"hf_dataset_repo"`
 	WorkerID        *string         `json:"worker_id" db:"worker_id"`
 	Status          string          `json:"status" db:"status"`
 	CurrentEpoch    int             `json:"current_epoch" db:"current_epoch"`

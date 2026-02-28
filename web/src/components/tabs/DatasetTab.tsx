@@ -338,9 +338,22 @@ export function DatasetTab({
   return (
     <div className="space-y-4">
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <StatsBar projectId={projectId} />
-        {(!total || isProcessing) && (
+      {total > 0 ? (
+        <div className="flex items-center justify-between">
+          <StatsBar projectId={projectId} />
+          {isProcessing && (
+            <Button
+              onClick={() => harnessMutation.mutate()}
+              disabled={isProcessing || harnessMutation.isPending}
+              className="bg-ecole-orange text-white hover:bg-ecole-orange-light"
+            >
+              <Sparkles className="mr-2 h-4 w-4" />
+              Generating...
+            </Button>
+          )}
+        </div>
+      ) : (
+        <div className="flex flex-col items-center justify-center py-8">
           <Button
             onClick={() => harnessMutation.mutate()}
             disabled={isProcessing || harnessMutation.isPending}
@@ -349,8 +362,8 @@ export function DatasetTab({
             <Sparkles className="mr-2 h-4 w-4" />
             {isProcessing ? "Generating..." : "Generate Dataset"}
           </Button>
-        )}
-      </div>
+        </div>
+      )}
 
       {/* Generation Progress */}
       {isProcessing && (
