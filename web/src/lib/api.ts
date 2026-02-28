@@ -91,6 +91,8 @@ export const api = {
     request<TrainingRun>(`/projects/${projectId}/training/${runId}`),
   deleteTrainingRun: (projectId: string, runId: string) =>
     request(`/projects/${projectId}/training/${runId}`, { method: "DELETE" }),
+  getTrainingLogs: (projectId: string, runId: string) =>
+    request<{ logs: string }>(`/projects/${projectId}/training/${runId}/logs`),
   uploadToHF: (projectId: string, runId: string) =>
     request<Job>(`/projects/${projectId}/training/${runId}/upload-hf`, { method: "POST" }),
 
@@ -102,6 +104,9 @@ export const api = {
     }),
   listBenchmarks: (projectId: string) =>
     request<Benchmark[]>(`/projects/${projectId}/benchmark`),
+
+  // Activity
+  getActivity: () => request<Activity>("/activity"),
 
   // Settings
   getKeys: () => request<{ anthropic_key: string; mistral_key: string; hf_token: string }>("/settings/keys"),
@@ -168,10 +173,15 @@ export interface TrainingRun {
   training_config: Record<string, unknown>;
   compute_mode: string;
   hf_namespace: string | null;
+  hf_job_id: string | null;
   status: string;
   current_epoch: number;
   total_epochs: number | null;
   train_loss: number | null;
+  current_step: number;
+  total_steps: number | null;
+  grad_norm: number | null;
+  learning_rate_current: number | null;
   output_model_path: string | null;
   hf_repo_id: string | null;
   error_message: string | null;
@@ -221,4 +231,44 @@ export interface DatasetStats {
   total: number;
   train_count: number;
   eval_count: number;
+}
+
+export interface ActivityTrainingRun {
+  id: string;
+  project_id: string;
+  project_name: string;
+  base_model: string;
+  compute_mode: string;
+  hf_job_id: string | null;
+  status: string;
+  current_epoch: number;
+  total_epochs: number | null;
+  train_loss: number | null;
+  current_step: number;
+  total_steps: number | null;
+  grad_norm: number | null;
+  learning_rate_current: number | null;
+  hf_repo_id: string | null;
+  error_message: string | null;
+  started_at: string | null;
+  completed_at: string | null;
+  created_at: string;
+}
+
+export interface ActivityJob {
+  id: string;
+  job_type: string;
+  project_id: string;
+  project_name: string;
+  status: string;
+  error: string | null;
+  progress_data: Record<string, unknown>;
+  created_at: string;
+  claimed_at: string | null;
+  completed_at: string | null;
+}
+
+export interface Activity {
+  training_runs: ActivityTrainingRun[];
+  jobs: ActivityJob[];
 }

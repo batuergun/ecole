@@ -25,8 +25,23 @@ import torch
 from datasets import Dataset
 from huggingface_hub import HfApi
 from peft import LoraConfig, TaskType
-from transformers import AutoModelForCausalLM, AutoTokenizer
+from transformers import AutoConfig, AutoModelForCausalLM, AutoTokenizer
 from trl import SFTConfig, SFTTrainer
+
+
+def _load_causal_model(model_name: str, dtype: torch.dtype, token: str):
+    """Load a causal LM, handling multimodal models like Ministral 3 (Mistral3)."""
+    config = AutoConfig.from_pretrained(model_name, token=token)
+    if config.model_type == "mistral3":
+        # Ministral 3 models use Mistral3Config (multimodal), which AutoModelForCausalLM
+        # doesn't support. Load the full model with Mistral3ForConditionalGeneration instead.
+        from transformers import Mistral3ForConditionalGeneration
+        return Mistral3ForConditionalGeneration.from_pretrained(
+            model_name, dtype=dtype, device_map="auto", token=token,
+        )
+    return AutoModelForCausalLM.from_pretrained(
+        model_name, dtype=dtype, device_map="auto", token=token,
+    )
 
 
 def main():
@@ -89,10 +104,9 @@ def main():
 
     # Load model
     print(f"[ecole-hf-job] Loading model in bf16...")
-    model = AutoModelForCausalLM.from_pretrained(
+    model = _load_causal_model(
         base_model,
-        torch_dtype=torch.bfloat16 if use_bf16 else torch.float32,
-        device_map="auto",
+        dtype=torch.bfloat16 if use_bf16 else torch.float32,
         token=hf_token,
     )
 
@@ -112,7 +126,7 @@ def main():
         per_device_train_batch_size=batch_size,
         learning_rate=lr,
         warmup_ratio=warmup_ratio,
-        max_seq_length=max_seq_length,
+        max_length=max_seq_length,
         gradient_accumulation_steps=grad_accum,
         logging_steps=logging_steps,
         bf16=use_bf16,

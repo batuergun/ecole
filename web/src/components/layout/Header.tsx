@@ -4,8 +4,9 @@ import { Button } from "@/components/ui/button";
 import { Sun, Moon } from "lucide-react";
 
 const titleMap: Record<string, string> = {
-  "/": "Projects",
-  "/projects/new": "New Project",
+  "/": "",
+  "/projects/new": "New Model",
+  "/jobs": "Jobs",
   "/settings": "Settings",
 };
 

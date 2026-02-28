@@ -5,6 +5,7 @@ import Dashboard from "@/pages/Dashboard";
 import NewProject from "@/pages/NewProject";
 import ProjectDetail from "@/pages/ProjectDetail";
 import Settings from "@/pages/Settings";
+import Jobs from "@/pages/Jobs";
 import Login from "@/pages/Login";
 
 export const router = createBrowserRouter([
@@ -23,6 +24,7 @@ export const router = createBrowserRouter([
       { index: true, element: <Dashboard /> },
       { path: "projects/new", element: <NewProject /> },
       { path: "projects/:id", element: <ProjectDetail /> },
+      { path: "jobs", element: <Jobs /> },
       { path: "settings", element: <Settings /> },
     ],
   },

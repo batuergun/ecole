@@ -6,7 +6,7 @@ import re
 
 import torch
 from peft import PeftModel
-from transformers import AutoModelForCausalLM, AutoTokenizer
+from transformers import AutoConfig, AutoModelForCausalLM, AutoTokenizer
 
 from worker.client import APIClient
 from worker.jobs.metrics import compute_metrics
@@ -284,12 +284,17 @@ def _evaluate_model(
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
 
-    # Load model
-    model = AutoModelForCausalLM.from_pretrained(
-        model_name,
-        torch_dtype=torch.bfloat16,
-        device_map="auto",
-    )
+    # Load model (handle multimodal models like Ministral 3)
+    config = AutoConfig.from_pretrained(model_name)
+    if config.model_type == "mistral3":
+        from transformers import Mistral3ForConditionalGeneration
+        model = Mistral3ForConditionalGeneration.from_pretrained(
+            model_name, dtype=torch.bfloat16, device_map="auto",
+        )
+    else:
+        model = AutoModelForCausalLM.from_pretrained(
+            model_name, dtype=torch.bfloat16, device_map="auto",
+        )
 
     # Apply adapter if provided
     if adapter_path:

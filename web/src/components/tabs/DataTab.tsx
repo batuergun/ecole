@@ -104,7 +104,7 @@ export function DataTab({ projectId }: { projectId: string }) {
               </div>
               <div className="flex items-center gap-2">
                 <Badge variant="outline" className="text-xs">
-                  {upload.status}
+                  {upload.status.replace(/_/g, " ").replace(/^\w/, (c) => c.toUpperCase())}
                 </Badge>
                 <Button
                   variant="ghost"

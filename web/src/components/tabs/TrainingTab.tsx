@@ -12,11 +12,36 @@ import {
   Dialog,
   DialogContent,
   DialogDescription,
-  DialogFooter,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Play, Upload, BarChart3, Cloud, Monitor, Cpu, Trash2, Settings } from "lucide-react";
+import {
+  Play,
+  Upload,
+  Cloud,
+  Monitor,
+  Cpu,
+  Trash2,
+  Settings,
+  ExternalLink,
+  Plus,
+  Clock,
+} from "lucide-react";
+
+function formatStatus(s: string): string {
+  return s.replace(/_/g, " ").replace(/^\w/, (c) => c.toUpperCase());
+}
+
+function formatRelativeTime(dateStr: string): string {
+  const diff = Date.now() - new Date(dateStr).getTime();
+  const mins = Math.floor(diff / 60000);
+  if (mins < 1) return "just now";
+  if (mins < 60) return `${mins}m ago`;
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.floor(hours / 24);
+  return `${days}d ago`;
+}
 
 const MODEL_OPTIONS = [
   { value: "mistralai/Ministral-3-3B-Reasoning-2512", label: "Ministral 3B (Fast)" },
@@ -52,7 +77,7 @@ export function TrainingTab({ projectId }: { projectId: string }) {
   const [computeMode, setComputeMode] = useState("local");
   const [hfFlavor, setHfFlavor] = useState(RECOMMENDED_FLAVORS[MODEL_OPTIONS[0].value] || "a10g-small");
   const [hfNamespace, setHfNamespace] = useState("");
-  const [showConfirmDialog, setShowConfirmDialog] = useState(false);
+  const [showNewRunDialog, setShowNewRunDialog] = useState(false);
 
   const { data: runs } = useQuery({
     queryKey: ["training-runs", projectId],
@@ -86,7 +111,7 @@ export function TrainingTab({ projectId }: { projectId: string }) {
       }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["training-runs", projectId] });
-      setShowConfirmDialog(false);
+      setShowNewRunDialog(false);
       toast.success(
         computeMode === "hf_jobs"
           ? "Training dispatched to HF Jobs"
@@ -94,7 +119,6 @@ export function TrainingTab({ projectId }: { projectId: string }) {
       );
     },
     onError: (err: Error) => {
-      setShowConfirmDialog(false);
       toast.error(err.message || "Failed to start training");
     },
   });
@@ -110,17 +134,6 @@ export function TrainingTab({ projectId }: { projectId: string }) {
     },
   });
 
-  const benchmarkMutation = useMutation({
-    mutationFn: (runId: string) => api.triggerBenchmark(projectId, runId),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["benchmarks", projectId] });
-      toast.success("Benchmark started");
-    },
-    onError: (err: Error) => {
-      toast.error(err.message || "Failed to start benchmark");
-    },
-  });
-
   const deleteMutation = useMutation({
     mutationFn: (runId: string) => api.deleteTrainingRun(projectId, runId),
     onSuccess: () => {
@@ -132,29 +145,161 @@ export function TrainingTab({ projectId }: { projectId: string }) {
     },
   });
 
-  const activeRun = runs?.find(
-    (r: TrainingRun) => r.status === "training" || r.status === "queued" || r.status === "downloading"
+  const hasRuns = runs && runs.length > 0;
+
+  const configForm = (
+    <div className="space-y-4">
+      {/* Compute Mode */}
+      <div>
+        <Label>Compute</Label>
+        <div className="grid grid-cols-2 gap-2 mt-1.5">
+          {COMPUTE_OPTIONS.map((opt) => (
+            <button
+              key={opt.value}
+              type="button"
+              onClick={() => setComputeMode(opt.value)}
+              className={`flex items-center gap-3 border p-3 text-left text-sm transition-colors ${
+                computeMode === opt.value
+                  ? "border-ecole-orange bg-ecole-orange/5"
+                  : "border-input hover:border-muted-foreground"
+              }`}
+            >
+              <opt.icon className={`h-4 w-4 shrink-0 ${
+                computeMode === opt.value ? "text-ecole-orange" : "text-muted-foreground"
+              }`} />
+              <div>
+                <p className="font-medium font-mono text-xs">{opt.label}</p>
+                <p className="text-xs text-muted-foreground">{opt.description}</p>
+              </div>
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Base Model */}
+      <div>
+        <Label>Base Model</Label>
+        <select
+          value={baseModel}
+          onChange={(e) => {
+            const model = e.target.value;
+            setBaseModel(model);
+            if (RECOMMENDED_FLAVORS[model]) setHfFlavor(RECOMMENDED_FLAVORS[model]);
+          }}
+          className="flex h-9 w-full border border-input bg-background px-3 py-1 text-sm"
+        >
+          {MODEL_OPTIONS.map((opt) => (
+            <option key={opt.value} value={opt.value}>
+              {opt.label}
+            </option>
+          ))}
+        </select>
+      </div>
+
+      <div className="grid grid-cols-2 gap-4">
+        <div>
+          <Label>Epochs</Label>
+          <Input value={epochs} onChange={(e) => setEpochs(e.target.value)} type="number" min="1" max="10" />
+        </div>
+        <div>
+          <Label>Batch Size</Label>
+          <Input value={batchSize} onChange={(e) => setBatchSize(e.target.value)} type="number" min="1" max="16" />
+        </div>
+        <div>
+          <Label>Learning Rate</Label>
+          <Input value={lr} onChange={(e) => setLr(e.target.value)} />
+        </div>
+        <div>
+          <Label>LoRA Rank (r)</Label>
+          <Input value={loraR} onChange={(e) => setLoraR(e.target.value)} type="number" min="4" max="64" />
+        </div>
+      </div>
+
+      {computeMode === "hf_jobs" && (
+        <>
+          <div>
+            <Label className="flex items-center gap-1.5">
+              <Cpu className="h-3.5 w-3.5" />
+              Hardware
+            </Label>
+            <div className="grid grid-cols-1 gap-1.5 mt-1.5">
+              {HF_FLAVOR_OPTIONS.map((opt) => {
+                const isRecommended = RECOMMENDED_FLAVORS[baseModel] === opt.value;
+                const isSelected = hfFlavor === opt.value;
+                return (
+                  <button
+                    key={opt.value}
+                    type="button"
+                    onClick={() => setHfFlavor(opt.value)}
+                    className={`flex items-center justify-between border p-2.5 text-left text-sm transition-colors ${
+                      isSelected
+                        ? "border-ecole-orange bg-ecole-orange/5"
+                        : "border-input hover:border-muted-foreground"
+                    }`}
+                  >
+                    <div className="flex items-center gap-2">
+                      <span className="font-mono text-xs font-medium">{opt.label}</span>
+                      {isRecommended && (
+                        <span className="text-[10px] font-mono px-1.5 py-0.5 bg-ecole-orange/10 text-ecole-orange border border-ecole-orange/20">
+                          Recommended
+                        </span>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-3 text-xs text-muted-foreground">
+                      <span>{opt.description}</span>
+                      <span className="font-mono">{opt.vram}</span>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          <div>
+            <Label>Organization Namespace</Label>
+            <Input
+              value={hfNamespace}
+              onChange={(e) => setHfNamespace(e.target.value)}
+              placeholder="Leave empty for personal account"
+            />
+            <p className="text-xs text-muted-foreground mt-1">
+              Org name to run the job under (billing & ownership). Leave empty to use your personal account.
+            </p>
+          </div>
+        </>
+      )}
+
+      <Button
+        onClick={() => launchMutation.mutate()}
+        disabled={launchMutation.isPending}
+        className="w-full bg-ecole-orange text-white hover:bg-ecole-orange-light"
+      >
+        {computeMode === "hf_jobs" ? (
+          <Cloud className="mr-2 h-4 w-4" />
+        ) : (
+          <Play className="mr-2 h-4 w-4" />
+        )}
+        {launchMutation.isPending
+          ? "Launching..."
+          : computeMode === "hf_jobs"
+            ? "Launch on HF Jobs"
+            : "Start Training"}
+      </Button>
+    </div>
   );
 
-  const handleLaunch = () => {
-    if (activeRun) {
-      setShowConfirmDialog(true);
-    } else {
-      launchMutation.mutate();
-    }
-  };
-
   return (
-    <div className="space-y-6">
-      {/* Training Runs */}
-      {runs && runs.length > 0 && (
+    <div className="space-y-4">
+      {/* Runs list */}
+      {hasRuns && (
         <div className="space-y-3">
           {runs.map((run: TrainingRun) => {
             const isFailed = run.status === "failed";
+            const isActive = run.status === "training" || run.status === "queued" || run.status === "downloading";
             const isHfTokenError = isFailed && run.error_message?.toLowerCase().includes("huggingface token");
 
             return (
-              <Card key={run.id} className="p-4">
+              <Card key={run.id} className={`p-4 ${isActive ? "border-ecole-orange/30" : ""}`}>
                 <div className="flex items-center justify-between">
                   <div>
                     <div className="flex items-center gap-2">
@@ -166,24 +311,32 @@ export function TrainingTab({ projectId }: { projectId: string }) {
                         </Badge>
                       )}
                     </div>
-                    <p className="text-xs text-muted-foreground mt-1">
-                      Epoch {run.current_epoch}/{run.total_epochs || "?"}
-                      {run.train_loss != null && ` / Loss: ${run.train_loss.toFixed(4)}`}
-                    </p>
+                    <div className="flex items-center gap-3 mt-1">
+                      <span className="text-xs text-muted-foreground font-mono">
+                        {run.current_step > 0 && run.total_steps
+                          ? `Step ${run.current_step}/${run.total_steps}`
+                          : `Epoch ${run.current_epoch}/${run.total_epochs || "?"}`}
+                        {run.train_loss != null && ` / Loss: ${run.train_loss.toFixed(4)}`}
+                      </span>
+                      <span className="text-xs text-muted-foreground/60 font-mono flex items-center gap-1">
+                        <Clock className="h-3 w-3" />
+                        {formatRelativeTime(run.created_at)}
+                      </span>
+                    </div>
                   </div>
                   <div className="flex items-center gap-2">
                     <Badge
                       className={
                         run.status === "completed"
                           ? "bg-primary text-primary-foreground"
-                          : run.status === "failed"
+                          : isFailed
                             ? "bg-destructive text-white"
-                            : run.status === "training"
+                            : isActive
                               ? "bg-ecole-orange text-white"
                               : ""
                       }
                     >
-                      {run.status}
+                      {formatStatus(run.status)}
                     </Badge>
                     {(isFailed || run.status === "completed") && (
                       <Button
@@ -198,15 +351,38 @@ export function TrainingTab({ projectId }: { projectId: string }) {
                   </div>
                 </div>
 
-                {run.status === "training" && (
-                  <div className="mt-3 h-1 w-full bg-muted">
-                    <div
-                      className="h-full bg-ecole-orange transition-all"
-                      style={{
-                        width: `${run.total_epochs ? (run.current_epoch / run.total_epochs) * 100 : 0}%`,
-                      }}
-                    />
-                  </div>
+                {/* Progress bar for active runs */}
+                {isActive && (() => {
+                  const pct = run.total_steps && run.current_step > 0
+                    ? (run.current_step / run.total_steps) * 100
+                    : run.total_epochs && run.current_epoch > 0
+                      ? (run.current_epoch / run.total_epochs) * 100
+                      : 0;
+                  return (
+                    <div className="mt-3 h-1 w-full bg-muted overflow-hidden">
+                      {pct > 0 ? (
+                        <div
+                          className="h-full bg-ecole-orange transition-all"
+                          style={{ width: `${pct}%` }}
+                        />
+                      ) : (
+                        <div className="h-full bg-ecole-orange/40 animate-pulse w-full" />
+                      )}
+                    </div>
+                  );
+                })()}
+
+                {/* HF Job link for running HF jobs */}
+                {isActive && run.compute_mode === "hf_jobs" && run.hf_job_id && (
+                  <a
+                    href={run.hf_job_id}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="mt-2 inline-flex items-center gap-1 text-xs text-ecole-orange hover:underline font-mono"
+                  >
+                    <ExternalLink className="h-3 w-3" />
+                    View job on HuggingFace
+                  </a>
                 )}
 
                 {isFailed && run.error_message && (
@@ -224,17 +400,8 @@ export function TrainingTab({ projectId }: { projectId: string }) {
                   </div>
                 )}
 
-                {run.status === "completed" && (
+                {run.status === "completed" && (run.compute_mode !== "hf_jobs" || run.hf_repo_id) && (
                   <div className="mt-3 flex gap-2">
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => benchmarkMutation.mutate(run.id)}
-                      disabled={benchmarkMutation.isPending}
-                    >
-                      <BarChart3 className="mr-1.5 h-3.5 w-3.5" />
-                      Benchmark
-                    </Button>
                     {run.compute_mode !== "hf_jobs" && (
                       <Button
                         size="sm"
@@ -264,176 +431,37 @@ export function TrainingTab({ projectId }: { projectId: string }) {
         </div>
       )}
 
-      {/* Config Form */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-sm font-mono tracking-wide text-muted-foreground">
-            {runs && runs.length > 0 ? "New Training Run" : "Configure Training"}
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          {/* Compute Mode */}
-          <div>
-            <Label>Compute</Label>
-            <div className="grid grid-cols-2 gap-2 mt-1.5">
-              {COMPUTE_OPTIONS.map((opt) => (
-                <button
-                  key={opt.value}
-                  type="button"
-                  onClick={() => setComputeMode(opt.value)}
-                  className={`flex items-center gap-3 border p-3 text-left text-sm transition-colors ${
-                    computeMode === opt.value
-                      ? "border-ecole-orange bg-ecole-orange/5"
-                      : "border-input hover:border-muted-foreground"
-                  }`}
-                >
-                  <opt.icon className={`h-4 w-4 shrink-0 ${
-                    computeMode === opt.value ? "text-ecole-orange" : "text-muted-foreground"
-                  }`} />
-                  <div>
-                    <p className="font-medium font-mono text-xs">{opt.label}</p>
-                    <p className="text-xs text-muted-foreground">{opt.description}</p>
-                  </div>
-                </button>
-              ))}
-            </div>
-          </div>
+      {/* Config: inline when no runs, "New Run" button when runs exist */}
+      {hasRuns ? (
+        <Button
+          variant="outline"
+          onClick={() => setShowNewRunDialog(true)}
+          className="w-full font-mono text-xs gap-1.5"
+        >
+          <Plus className="h-3.5 w-3.5" />
+          New Training Run
+        </Button>
+      ) : (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-sm font-mono tracking-wide text-muted-foreground">
+              Configure Training
+            </CardTitle>
+          </CardHeader>
+          <CardContent>{configForm}</CardContent>
+        </Card>
+      )}
 
-          {/* Base Model */}
-          <div>
-            <Label>Base Model</Label>
-            <select
-              value={baseModel}
-              onChange={(e) => {
-                const model = e.target.value;
-                setBaseModel(model);
-                if (RECOMMENDED_FLAVORS[model]) setHfFlavor(RECOMMENDED_FLAVORS[model]);
-              }}
-              className="flex h-9 w-full border border-input bg-background px-3 py-1 text-sm"
-            >
-              {MODEL_OPTIONS.map((opt) => (
-                <option key={opt.value} value={opt.value}>
-                  {opt.label}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <Label>Epochs</Label>
-              <Input value={epochs} onChange={(e) => setEpochs(e.target.value)} type="number" min="1" max="10" />
-            </div>
-            <div>
-              <Label>Batch Size</Label>
-              <Input value={batchSize} onChange={(e) => setBatchSize(e.target.value)} type="number" min="1" max="16" />
-            </div>
-            <div>
-              <Label>Learning Rate</Label>
-              <Input value={lr} onChange={(e) => setLr(e.target.value)} />
-            </div>
-            <div>
-              <Label>LoRA Rank (r)</Label>
-              <Input value={loraR} onChange={(e) => setLoraR(e.target.value)} type="number" min="4" max="64" />
-            </div>
-          </div>
-
-          {computeMode === "hf_jobs" && (
-            <>
-              {/* Hardware */}
-              <div>
-                <Label className="flex items-center gap-1.5">
-                  <Cpu className="h-3.5 w-3.5" />
-                  Hardware
-                </Label>
-                <div className="grid grid-cols-1 gap-1.5 mt-1.5">
-                  {HF_FLAVOR_OPTIONS.map((opt) => {
-                    const isRecommended = RECOMMENDED_FLAVORS[baseModel] === opt.value;
-                    const isSelected = hfFlavor === opt.value;
-                    return (
-                      <button
-                        key={opt.value}
-                        type="button"
-                        onClick={() => setHfFlavor(opt.value)}
-                        className={`flex items-center justify-between border p-2.5 text-left text-sm transition-colors ${
-                          isSelected
-                            ? "border-ecole-orange bg-ecole-orange/5"
-                            : "border-input hover:border-muted-foreground"
-                        }`}
-                      >
-                        <div className="flex items-center gap-2">
-                          <span className="font-mono text-xs font-medium">{opt.label}</span>
-                          {isRecommended && (
-                            <span className="text-[10px] font-mono px-1.5 py-0.5 bg-ecole-orange/10 text-ecole-orange border border-ecole-orange/20">
-                              Recommended
-                            </span>
-                          )}
-                        </div>
-                        <div className="flex items-center gap-3 text-xs text-muted-foreground">
-                          <span>{opt.description}</span>
-                          <span className="font-mono">{opt.vram}</span>
-                        </div>
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-
-              <div>
-                <Label>Organization Namespace</Label>
-                <Input
-                  value={hfNamespace}
-                  onChange={(e) => setHfNamespace(e.target.value)}
-                  placeholder="Leave empty for personal account"
-                />
-                <p className="text-xs text-muted-foreground mt-1">
-                  Org name to run the job under (billing & ownership). Leave empty to use your personal account.
-                </p>
-              </div>
-            </>
-          )}
-
-          <Button
-            onClick={handleLaunch}
-            disabled={launchMutation.isPending}
-            className="w-full bg-ecole-orange text-white hover:bg-ecole-orange-light"
-          >
-            {computeMode === "hf_jobs" ? (
-              <Cloud className="mr-2 h-4 w-4" />
-            ) : (
-              <Play className="mr-2 h-4 w-4" />
-            )}
-            {launchMutation.isPending
-              ? "Launching..."
-              : computeMode === "hf_jobs"
-                ? "Launch on HF Jobs"
-                : "Start Training"}
-          </Button>
-        </CardContent>
-      </Card>
-
-      {/* Confirmation Dialog */}
-      <Dialog open={showConfirmDialog} onOpenChange={setShowConfirmDialog}>
-        <DialogContent>
+      {/* New Run Dialog */}
+      <Dialog open={showNewRunDialog} onOpenChange={setShowNewRunDialog}>
+        <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>Training already in progress</DialogTitle>
+            <DialogTitle className="font-mono">New Training Run</DialogTitle>
             <DialogDescription>
-              You have a training run that is currently {activeRun?.status}. Starting a new
-              run will not cancel the existing one. Both will run simultaneously.
+              Configure and launch a new training run.
             </DialogDescription>
           </DialogHeader>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShowConfirmDialog(false)}>
-              Cancel
-            </Button>
-            <Button
-              className="bg-ecole-orange text-white hover:bg-ecole-orange-light"
-              onClick={() => launchMutation.mutate()}
-              disabled={launchMutation.isPending}
-            >
-              {launchMutation.isPending ? "Launching..." : "Launch Anyway"}
-            </Button>
-          </DialogFooter>
+          {configForm}
         </DialogContent>
       </Dialog>
     </div>

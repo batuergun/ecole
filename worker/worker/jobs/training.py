@@ -2,6 +2,7 @@
 
 import json
 import os
+import re
 import time
 
 from worker.client import APIClient
@@ -19,6 +20,48 @@ DEFAULT_HF_FLAVORS = {
     "mistralai/Ministral-3-3B-Reasoning-2512": "a10g-small",
     "mistralai/Ministral-3-8B-Reasoning-2512": "a10g-large",
 }
+
+
+def _parse_hf_metrics(log_text: str) -> dict:
+    """Parse training metrics from HF Jobs log output.
+
+    Looks for the last metrics dict (e.g. {'loss': 0.5, 'grad_norm': 1.2, ...})
+    and step progress lines (e.g. '5/12 [00:30<01:00, ...]').
+    """
+    result: dict = {}
+
+    # Find last metrics dict: {'loss': ..., 'grad_norm': ..., 'learning_rate': ..., 'epoch': ...}
+    metrics_pattern = re.compile(r"\{['\"]loss['\"]:\s*[\d.]+.*?\}")
+    matches = metrics_pattern.findall(log_text)
+    if matches:
+        last_match = matches[-1]
+        # Convert single-quoted Python dict to valid JSON
+        try:
+            json_str = last_match.replace("'", '"')
+            metrics = json.loads(json_str)
+            if "loss" in metrics:
+                result["loss"] = float(metrics["loss"])
+            if "grad_norm" in metrics:
+                result["grad_norm"] = float(metrics["grad_norm"])
+            if "learning_rate" in metrics:
+                result["learning_rate"] = float(metrics["learning_rate"])
+            if "epoch" in metrics:
+                result["epoch"] = float(metrics["epoch"])
+        except (json.JSONDecodeError, ValueError):
+            pass
+
+    # Find step progress: N/M or N / M within progress bar lines
+    step_pattern = re.compile(r"(\d+)/(\d+)\s*\[")
+    step_matches = step_pattern.findall(log_text)
+    if step_matches:
+        last_step = step_matches[-1]
+        try:
+            result["current_step"] = int(last_step[0])
+            result["total_steps"] = int(last_step[1])
+        except ValueError:
+            pass
+
+    return result
 
 
 def run(client: APIClient, job: dict) -> None:
@@ -49,7 +92,7 @@ def _run_hf_jobs(
     run_info: dict,
 ) -> None:
     """Dispatch training to HF Jobs infrastructure."""
-    from huggingface_hub import run_uv_job, inspect_job
+    from huggingface_hub import run_uv_job, inspect_job, fetch_job_logs
 
     base_model = run_info["base_model"]
     lora_config_raw = run_info.get("lora_config", {})
@@ -128,7 +171,11 @@ def _run_hf_jobs(
     hf_job = run_uv_job(HF_JOB_ENTRY_SCRIPT, **job_kwargs)
 
     hf_job_id = hf_job.id
-    print(f"[training:hf_jobs] Dispatched HF Job: {hf_job_id} — {hf_job.url}")
+    hf_job_url = getattr(hf_job, "url", None) or f"https://huggingface.co/jobs/{hf_job_id}"
+    print(f"[training:hf_jobs] Dispatched HF Job: {hf_job_id} — {hf_job_url}")
+
+    # Save HF job URL so the frontend can link to it
+    client.set_hf_job_id(training_run_id, hf_job_url)
 
     # Update training run status
     client.update_training_progress(training_run_id, epoch=0)
@@ -137,6 +184,7 @@ def _run_hf_jobs(
     poll_interval = 30  # seconds
     max_poll_failures = 5  # consecutive failures before giving up
     consecutive_failures = 0
+    accumulated_logs = ""
 
     while True:
         time.sleep(poll_interval)
@@ -157,7 +205,28 @@ def _run_hf_jobs(
 
         print(f"[training:hf_jobs] Job {hf_job_id} status: {stage}")
 
+        # Fetch logs for running/completed/error stages
+        if stage in ("RUNNING", "COMPLETED", "ERROR"):
+            try:
+                log_text = fetch_job_logs(job_id=hf_job_id, token=hf_token)
+                if log_text:
+                    accumulated_logs = log_text
+                    client.update_training_logs(training_run_id, accumulated_logs)
+            except Exception as e:
+                print(f"[training:hf_jobs] Failed to fetch logs: {e}")
+
         if stage == "COMPLETED":
+            # Final log + metrics parse
+            metrics = _parse_hf_metrics(accumulated_logs)
+            client.update_training_progress(
+                training_run_id,
+                epoch=int(metrics.get("epoch", 0)),
+                loss=metrics.get("loss"),
+                current_step=metrics.get("current_step", 0),
+                total_steps=metrics.get("total_steps"),
+                grad_norm=metrics.get("grad_norm"),
+                learning_rate=metrics.get("learning_rate"),
+            )
             # Job finished — adapter should be on HF Hub
             client.set_training_hf_repo(training_run_id, output_repo)
             client.complete_training_run(training_run_id, f"hf://{output_repo}")
@@ -171,8 +240,17 @@ def _run_hf_jobs(
             raise RuntimeError(f"HF Job failed: {error_msg}")
 
         elif stage in ("RUNNING", "STARTING"):
-            # Report progress (we don't have epoch-level granularity from HF Jobs)
-            client.update_training_progress(training_run_id, epoch=0)
+            # Parse metrics from logs and report progress
+            metrics = _parse_hf_metrics(accumulated_logs)
+            client.update_training_progress(
+                training_run_id,
+                epoch=int(metrics.get("epoch", 0)),
+                loss=metrics.get("loss"),
+                current_step=metrics.get("current_step", 0),
+                total_steps=metrics.get("total_steps"),
+                grad_norm=metrics.get("grad_norm"),
+                learning_rate=metrics.get("learning_rate"),
+            )
 
         # If job is in any other state (QUEUED, etc.), just keep polling
 
@@ -188,7 +266,7 @@ def _run_local(
     import torch
     from datasets import Dataset
     from peft import LoraConfig, TaskType
-    from transformers import AutoModelForCausalLM, AutoTokenizer, TrainerCallback
+    from transformers import AutoConfig, AutoModelForCausalLM, AutoTokenizer, TrainerCallback
     from trl import SFTConfig, SFTTrainer
 
     base_model = run_info["base_model"]
@@ -244,12 +322,18 @@ def _run_local(
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
 
-    # Load model in bf16
-    model = AutoModelForCausalLM.from_pretrained(
-        base_model,
-        torch_dtype=torch.bfloat16 if use_bf16 else torch.float32,
-        device_map="auto",
-    )
+    # Load model in bf16 (handle multimodal models like Ministral 3)
+    model_dtype = torch.bfloat16 if use_bf16 else torch.float32
+    config = AutoConfig.from_pretrained(base_model)
+    if config.model_type == "mistral3":
+        from transformers import Mistral3ForConditionalGeneration
+        model = Mistral3ForConditionalGeneration.from_pretrained(
+            base_model, dtype=model_dtype, device_map="auto",
+        )
+    else:
+        model = AutoModelForCausalLM.from_pretrained(
+            base_model, dtype=model_dtype, device_map="auto",
+        )
 
     # LoRA config
     peft_config = LoraConfig(
@@ -267,7 +351,7 @@ def _run_local(
         per_device_train_batch_size=batch_size,
         learning_rate=lr,
         warmup_ratio=warmup_ratio,
-        max_seq_length=max_seq_length,
+        max_length=max_seq_length,
         gradient_accumulation_steps=grad_accum,
         logging_steps=logging_steps,
         bf16=use_bf16,
@@ -278,16 +362,52 @@ def _run_local(
     )
 
     # Progress callback
+    log_lines: list[str] = []
+
     class ProgressCallback(TrainerCallback):
         def on_log(self, args, state, control, logs=None, **kwargs):
             if logs and "loss" in logs:
                 epoch = int(state.epoch) if state.epoch else 0
                 loss = logs.get("loss")
-                client.update_training_progress(training_run_id, epoch=epoch, loss=loss)
+                grad_norm = logs.get("grad_norm")
+                lr = logs.get("learning_rate")
+                current_step = state.global_step
+                total_steps = state.max_steps
+
+                # Capture log line
+                log_entry = f"Step {current_step}/{total_steps} | loss={loss}"
+                if grad_norm is not None:
+                    log_entry += f" grad_norm={grad_norm:.4f}"
+                if lr is not None:
+                    log_entry += f" lr={lr:.2e}"
+                log_lines.append(log_entry)
+
+                client.update_training_progress(
+                    training_run_id,
+                    epoch=epoch,
+                    loss=loss,
+                    current_step=current_step,
+                    total_steps=total_steps,
+                    grad_norm=grad_norm,
+                    learning_rate=lr,
+                )
+
+                # Send logs every 5 log events
+                if len(log_lines) % 5 == 0:
+                    client.update_training_logs(training_run_id, "\n".join(log_lines))
 
         def on_epoch_end(self, args, state, control, **kwargs):
             epoch = int(state.epoch) if state.epoch else 0
-            client.update_training_progress(training_run_id, epoch=epoch)
+            client.update_training_progress(
+                training_run_id,
+                epoch=epoch,
+                current_step=state.global_step,
+                total_steps=state.max_steps,
+            )
+
+        def on_train_end(self, args, state, control, **kwargs):
+            if log_lines:
+                client.update_training_logs(training_run_id, "\n".join(log_lines))
 
     print(f"[training:local] Starting SFTTrainer: {num_epochs} epochs, batch={batch_size}, lr={lr}")
 

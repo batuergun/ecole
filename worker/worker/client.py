@@ -116,10 +116,32 @@ class APIClient:
         resp.raise_for_status()
         return resp.json()
 
-    def update_training_progress(self, training_run_id: str, epoch: int, loss: float | None = None) -> None:
+    def update_training_progress(
+        self,
+        training_run_id: str,
+        epoch: int,
+        loss: float | None = None,
+        current_step: int = 0,
+        total_steps: int | None = None,
+        grad_norm: float | None = None,
+        learning_rate: float | None = None,
+    ) -> None:
+        body: dict = {"status": "training", "epoch": epoch, "loss": loss, "current_step": current_step}
+        if total_steps is not None:
+            body["total_steps"] = total_steps
+        if grad_norm is not None:
+            body["grad_norm"] = grad_norm
+        if learning_rate is not None:
+            body["learning_rate"] = learning_rate
         self.http.patch(
             f"{self.api_url}/api/worker/training-runs/{training_run_id}/progress",
-            json={"status": "training", "epoch": epoch, "loss": loss},
+            json=body,
+        )
+
+    def update_training_logs(self, training_run_id: str, logs: str) -> None:
+        self.http.put(
+            f"{self.api_url}/api/worker/training-runs/{training_run_id}/logs",
+            json={"logs": logs},
         )
 
     def complete_training_run(self, training_run_id: str, output_path: str) -> None:
@@ -132,6 +154,12 @@ class APIClient:
         self.http.post(
             f"{self.api_url}/api/worker/training-runs/{training_run_id}/fail",
             json={"error": error},
+        )
+
+    def set_hf_job_id(self, training_run_id: str, job_id: str) -> None:
+        self.http.post(
+            f"{self.api_url}/api/worker/training-runs/{training_run_id}/hf-job",
+            json={"job_id": job_id},
         )
 
     def set_training_hf_repo(self, training_run_id: str, repo_id: str) -> None:
