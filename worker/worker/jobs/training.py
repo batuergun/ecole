@@ -142,7 +142,7 @@ def _run_hf_jobs(
         time.sleep(poll_interval)
 
         try:
-            job_info = inspect_job(hf_job_id, token=hf_token)
+            job_info = inspect_job(job_id=hf_job_id, token=hf_token)
             consecutive_failures = 0
         except Exception as e:
             consecutive_failures += 1

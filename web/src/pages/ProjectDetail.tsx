@@ -351,13 +351,12 @@ export default function ProjectDetail() {
                     {showContinue && (
                       <div className="mt-4 pt-4 border-t border-border flex justify-end">
                         <Button
-                          variant="outline"
                           size="sm"
                           onClick={(e) => {
                             e.stopPropagation();
                             goToNext(step.id);
                           }}
-                          className="font-mono text-xs gap-1.5"
+                          className="font-mono text-xs gap-1.5 bg-ecole-orange text-white hover:bg-ecole-orange-light"
                         >
                           Continue to {nextStep!.title}
                           <ArrowRight className="h-3.5 w-3.5" />

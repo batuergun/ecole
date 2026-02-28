@@ -108,13 +108,11 @@ export function TrainingTab({ projectId }: { projectId: string }) {
     },
   });
 
-  const activeRun = runs?.find(
-    (r: TrainingRun) => r.status === "training" || r.status === "queued" || r.status === "downloading"
-  );
+  const hasRuns = runs && runs.length > 0;
 
   return (
     <div className="space-y-6">
-      {!activeRun && (
+      {!hasRuns && (
         <Card>
           <CardHeader>
             <CardTitle className="text-sm font-mono tracking-wide text-muted-foreground">
@@ -240,9 +238,6 @@ export function TrainingTab({ projectId }: { projectId: string }) {
                     Org name to run the job under (billing & ownership). Leave empty to use your personal account.
                   </p>
                 </div>
-                <p className="text-xs text-muted-foreground border border-border p-2">
-                  Requires HuggingFace Pro or Enterprise. Configure your HF token in Settings.
-                </p>
               </>
             )}
 

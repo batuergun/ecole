@@ -48,7 +48,7 @@ function QAStream({ projectId }: { projectId: string }) {
   const [fading, setFading] = useState(false);
   const seenRef = useRef<Set<string>>(new Set());
   const queueRef = useRef<DatasetItem[]>([]);
-  const timerRef = useRef<ReturnType<typeof setTimeout>>();
+  const timerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
 
   const { data } = useQuery({
     queryKey: ["dataset-stream", projectId],
@@ -340,14 +340,16 @@ export function DatasetTab({
       {/* Header */}
       <div className="flex items-center justify-between">
         <StatsBar projectId={projectId} />
-        <Button
-          onClick={() => harnessMutation.mutate()}
-          disabled={isProcessing || harnessMutation.isPending}
-          className="bg-ecole-orange text-white hover:bg-ecole-orange-light"
-        >
-          <Sparkles className="mr-2 h-4 w-4" />
-          {isProcessing ? "Generating..." : "Generate Dataset"}
-        </Button>
+        {(!total || isProcessing) && (
+          <Button
+            onClick={() => harnessMutation.mutate()}
+            disabled={isProcessing || harnessMutation.isPending}
+            className="bg-ecole-orange text-white hover:bg-ecole-orange-light"
+          >
+            <Sparkles className="mr-2 h-4 w-4" />
+            {isProcessing ? "Generating..." : "Generate Dataset"}
+          </Button>
+        )}
       </div>
 
       {/* Generation Progress */}

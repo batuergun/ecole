@@ -87,10 +87,18 @@ def run(client: APIClient, job: dict) -> None:
     if not uploads:
         raise ValueError("No files uploaded to this project")
 
-    all_qa_items: list[dict] = []
-    total_chunks = 0
+    total_files = len(uploads)
+    total_qa = 0
 
-    for upload in uploads:
+    # Report initial progress immediately so the UI shows file count
+    client.report_progress(job_id, {
+        "status": "running",
+        "processed_files": 0,
+        "total_files": total_files,
+        "total_qa_pairs": 0,
+    })
+
+    for file_idx, upload in enumerate(uploads):
         print(f"[harness] Processing: {upload['filename']}")
 
         # Download file
@@ -101,39 +109,35 @@ def run(client: APIClient, job: dict) -> None:
             mime = upload.get("mime_type", "")
 
             if mime == "application/pdf" or upload["filename"].lower().endswith(".pdf"):
-                chunks = _process_pdf(client, llm, upload, local_path, context_section, context, qa_per_chunk)
+                count = _process_pdf(
+                    client, llm, upload, local_path, context_section, context, qa_per_chunk,
+                    project_id=project_id, job_id=job_id,
+                    file_idx=file_idx, total_files=total_files, running_total=total_qa,
+                )
             else:
-                chunks = _process_text(client, llm, upload, local_path, context_section, context, qa_per_chunk)
+                count = _process_text(
+                    client, llm, upload, local_path, context_section, context, qa_per_chunk,
+                    project_id=project_id, job_id=job_id,
+                    file_idx=file_idx, total_files=total_files, running_total=total_qa,
+                )
 
-            total_chunks += len(chunks)
-            all_qa_items.extend(chunks)
+            total_qa += count
 
+            # Report file-level progress
             client.report_progress(job_id, {
                 "status": "running",
-                "processed_files": uploads.index(upload) + 1,
-                "total_files": len(uploads),
-                "total_qa_pairs": len(all_qa_items),
+                "processed_files": file_idx + 1,
+                "total_files": total_files,
+                "total_qa_pairs": total_qa,
             })
 
-    if not all_qa_items:
+    if total_qa == 0:
         raise ValueError("No Q&A pairs generated from the uploaded data")
-
-    # Mark ~10% as eval
-    random.shuffle(all_qa_items)
-    eval_count = max(1, int(len(all_qa_items) * EVAL_RATIO))
-    for i, item in enumerate(all_qa_items):
-        item["is_eval"] = i < eval_count
-
-    # Batch insert into database
-    BATCH_SIZE = 50
-    for i in range(0, len(all_qa_items), BATCH_SIZE):
-        batch = all_qa_items[i : i + BATCH_SIZE]
-        client.batch_create_dataset(project_id, batch)
 
     # Update project status
     client.update_project_status(project_id, "dataset_ready")
 
-    print(f"[harness] Done: {len(all_qa_items)} Q&A pairs from {total_chunks} chunks")
+    print(f"[harness] Done: {total_qa} Q&A pairs")
 
 
 def _build_context_section(context: dict) -> str:
@@ -152,6 +156,42 @@ def _build_context_section(context: dict) -> str:
     return "## Context About the Target Model\n" + "\n".join(parts)
 
 
+def _insert_and_report(
+    client: APIClient,
+    project_id: str,
+    job_id: str,
+    chunk_id: str,
+    qa_pairs: list[dict],
+    file_idx: int,
+    total_files: int,
+    running_total: int,
+) -> int:
+    """Insert Q&A pairs for a chunk and report progress. Returns count inserted."""
+    if not qa_pairs:
+        return 0
+
+    items = []
+    for qa in qa_pairs:
+        items.append({
+            "chunk_id": chunk_id,
+            "question": qa["question"],
+            "answer": qa["answer"],
+            "is_eval": random.random() < EVAL_RATIO,
+        })
+
+    client.batch_create_dataset(project_id, items)
+    new_total = running_total + len(items)
+
+    client.report_progress(job_id, {
+        "status": "running",
+        "processed_files": file_idx,
+        "total_files": total_files,
+        "total_qa_pairs": new_total,
+    })
+
+    return len(items)
+
+
 def _process_pdf(
     client: APIClient,
     llm: LLMClient,
@@ -160,8 +200,15 @@ def _process_pdf(
     context_section: str,
     context: dict,
     qa_per_chunk: int = DEFAULT_QA_PER_CHUNK,
-) -> list[dict]:
-    """Process a PDF file: combine text, sub-chunk, and generate Q&A with page images."""
+    *,
+    project_id: str,
+    job_id: str,
+    file_idx: int,
+    total_files: int,
+    running_total: int,
+) -> int:
+    """Process a PDF file: combine text, sub-chunk, and generate Q&A with page images.
+    Inserts Q&A pairs per-chunk and reports progress. Returns total count generated."""
     pages = extract_pdf_pages(local_path)
 
     # Build combined text and track page boundaries
@@ -183,7 +230,7 @@ def _process_pdf(
         elif page_data.get("image_base64"):
             image_only_pages.append(page_data)
 
-    all_items: list[dict] = []
+    items_count = 0
     format_instructions = _build_format_instructions(context)
     chunk_index = 0
 
@@ -236,12 +283,11 @@ def _process_pdf(
             has_images = any(pidx in page_images for pidx in relevant_pages[:2])
             qa_pairs = _call_llm(llm, content_blocks, use_vision=has_images)
 
-            for qa in qa_pairs:
-                all_items.append({
-                    "chunk_id": chunk["id"],
-                    "question": qa["question"],
-                    "answer": qa["answer"],
-                })
+            count = _insert_and_report(
+                client, project_id, job_id, chunk["id"], qa_pairs,
+                file_idx, total_files, running_total + items_count,
+            )
+            items_count += count
 
     # Process image-only pages (diagrams, charts, etc.)
     for page_data in image_only_pages:
@@ -272,14 +318,14 @@ def _process_pdf(
         content_blocks.append({"type": "text", "text": prompt_text})
 
         qa_pairs = _call_llm(llm, content_blocks, use_vision=True)
-        for qa in qa_pairs:
-            all_items.append({
-                "chunk_id": chunk["id"],
-                "question": qa["question"],
-                "answer": qa["answer"],
-            })
 
-    return all_items
+        count = _insert_and_report(
+            client, project_id, job_id, chunk["id"], qa_pairs,
+            file_idx, total_files, running_total + items_count,
+        )
+        items_count += count
+
+    return items_count
 
 
 def _build_format_instructions(context: dict) -> str:
@@ -300,13 +346,20 @@ def _process_text(
     context_section: str,
     context: dict,
     qa_per_chunk: int = DEFAULT_QA_PER_CHUNK,
-) -> list[dict]:
-    """Process a text file: chunk and generate Q&A pairs."""
+    *,
+    project_id: str,
+    job_id: str,
+    file_idx: int,
+    total_files: int,
+    running_total: int,
+) -> int:
+    """Process a text file: chunk and generate Q&A pairs.
+    Inserts Q&A pairs per-chunk and reports progress. Returns total count generated."""
     with open(local_path, "r", errors="replace") as f:
         text = f.read()
 
     chunks = chunk_text(text)
-    all_items = []
+    items_count = 0
 
     for i, chunk_text_content in enumerate(chunks):
         if not chunk_text_content.strip():
@@ -330,14 +383,13 @@ def _process_text(
         content_blocks = [{"type": "text", "text": prompt_text}]
         qa_pairs = _call_llm(llm, content_blocks, use_vision=False)
 
-        for qa in qa_pairs:
-            all_items.append({
-                "chunk_id": chunk["id"],
-                "question": qa["question"],
-                "answer": qa["answer"],
-            })
+        count = _insert_and_report(
+            client, project_id, job_id, chunk["id"], qa_pairs,
+            file_idx, total_files, running_total + items_count,
+        )
+        items_count += count
 
-    return all_items
+    return items_count
 
 
 def _call_llm(llm: LLMClient, content_blocks: list[dict], use_vision: bool = False) -> list[dict]:
