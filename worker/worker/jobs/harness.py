@@ -1,5 +1,6 @@
 """Auto-harness: extract data from uploads and generate Q&A pairs using an LLM."""
 
+import concurrent.futures
 import json
 import os
 import random
@@ -11,6 +12,7 @@ from worker.pdf.extract import extract_pdf_pages, chunk_text, chunk_text_with_po
 
 
 DEFAULT_QA_PER_CHUNK = 10
+DEFAULT_CONCURRENCY = 5
 EVAL_RATIO = 0.1
 
 SYSTEM_PROMPT = """You are a training data generator for fine-tuning language models. \
@@ -66,6 +68,12 @@ def run(client: APIClient, job: dict) -> None:
         qa_per_chunk = DEFAULT_QA_PER_CHUNK
     qa_per_chunk = max(1, min(20, qa_per_chunk))
 
+    try:
+        concurrency = int(context.get("concurrency", DEFAULT_CONCURRENCY))
+    except (ValueError, TypeError):
+        concurrency = DEFAULT_CONCURRENCY
+    concurrency = max(1, min(20, concurrency))
+
     # Fall back to env vars if keys not set in DB
     if provider == "anthropic" and not keys.get("anthropic_key"):
         env_key = os.getenv("ANTHROPIC_API_KEY", "")
@@ -78,7 +86,7 @@ def run(client: APIClient, job: dict) -> None:
 
     llm = create_llm_client(provider, keys)
 
-    print(f"[harness] Using LLM provider: {provider} | qa_per_chunk: {qa_per_chunk}")
+    print(f"[harness] Using LLM provider: {provider} | qa_per_chunk: {qa_per_chunk} | concurrency: {concurrency}")
 
     context_section = _build_context_section(context)
 
@@ -113,12 +121,14 @@ def run(client: APIClient, job: dict) -> None:
                     client, llm, upload, local_path, context_section, context, qa_per_chunk,
                     project_id=project_id, job_id=job_id,
                     file_idx=file_idx, total_files=total_files, running_total=total_qa,
+                    concurrency=concurrency,
                 )
             else:
                 count = _process_text(
                     client, llm, upload, local_path, context_section, context, qa_per_chunk,
                     project_id=project_id, job_id=job_id,
                     file_idx=file_idx, total_files=total_files, running_total=total_qa,
+                    concurrency=concurrency,
                 )
 
             total_qa += count
@@ -206,6 +216,7 @@ def _process_pdf(
     file_idx: int,
     total_files: int,
     running_total: int,
+    concurrency: int = DEFAULT_CONCURRENCY,
 ) -> int:
     """Process a PDF file: combine text, sub-chunk, and generate Q&A with page images.
     Inserts Q&A pairs per-chunk and reports progress. Returns total count generated."""
@@ -230,11 +241,12 @@ def _process_pdf(
         elif page_data.get("image_base64"):
             image_only_pages.append(page_data)
 
-    items_count = 0
     format_instructions = _build_format_instructions(context)
     chunk_index = 0
 
-    # Sub-chunk the combined text (smaller chunks = more training data)
+    # Phase 1: create chunks and prepare prompts (fast, sequential)
+    work_items: list[tuple[str, list[dict], bool]] = []  # (chunk_id, content_blocks, use_vision)
+
     if combined.strip():
         text_chunks = chunk_text_with_positions(combined, chunk_size=2000, overlap=200)
         print(f"[harness] PDF text: {len(combined)} chars -> {len(text_chunks)} chunks")
@@ -243,7 +255,6 @@ def _process_pdf(
             if not chunk_content.strip():
                 continue
 
-            # Find which pages this chunk overlaps with
             relevant_pages = [
                 pidx for pidx, ps, pe in page_boundaries
                 if ps < chunk_end and pe > chunk_start
@@ -257,9 +268,6 @@ def _process_pdf(
             )
             chunk_index += 1
 
-            n_qa = qa_per_chunk
-
-            # Attach relevant page images for vision context (max 2)
             content_blocks: list[dict] = []
             for pidx in relevant_pages[:2]:
                 if pidx in page_images:
@@ -273,7 +281,7 @@ def _process_pdf(
                     })
 
             prompt_text = QA_GENERATION_PROMPT.format(
-                n=n_qa,
+                n=qa_per_chunk,
                 context_section=context_section,
                 content=chunk_content[:3000],
                 format_instructions=format_instructions,
@@ -281,15 +289,8 @@ def _process_pdf(
             content_blocks.append({"type": "text", "text": prompt_text})
 
             has_images = any(pidx in page_images for pidx in relevant_pages[:2])
-            qa_pairs = _call_llm(llm, content_blocks, use_vision=has_images)
+            work_items.append((chunk["id"], content_blocks, has_images))
 
-            count = _insert_and_report(
-                client, project_id, job_id, chunk["id"], qa_pairs,
-                file_idx, total_files, running_total + items_count,
-            )
-            items_count += count
-
-    # Process image-only pages (diagrams, charts, etc.)
     for page_data in image_only_pages:
         chunk = client.create_chunk(
             upload_id=upload["id"],
@@ -316,14 +317,23 @@ def _process_pdf(
             format_instructions=format_instructions,
         )
         content_blocks.append({"type": "text", "text": prompt_text})
+        work_items.append((chunk["id"], content_blocks, True))
 
-        qa_pairs = _call_llm(llm, content_blocks, use_vision=True)
-
-        count = _insert_and_report(
-            client, project_id, job_id, chunk["id"], qa_pairs,
-            file_idx, total_files, running_total + items_count,
-        )
-        items_count += count
+    # Phase 2: parallel LLM calls
+    items_count = 0
+    with concurrent.futures.ThreadPoolExecutor(max_workers=concurrency) as executor:
+        future_to_chunk = {
+            executor.submit(_call_llm, llm, cb, vis): chunk_id
+            for chunk_id, cb, vis in work_items
+        }
+        for future in concurrent.futures.as_completed(future_to_chunk):
+            chunk_id = future_to_chunk[future]
+            qa_pairs = future.result()
+            count = _insert_and_report(
+                client, project_id, job_id, chunk_id, qa_pairs,
+                file_idx, total_files, running_total + items_count,
+            )
+            items_count += count
 
     return items_count
 
@@ -352,6 +362,7 @@ def _process_text(
     file_idx: int,
     total_files: int,
     running_total: int,
+    concurrency: int = DEFAULT_CONCURRENCY,
 ) -> int:
     """Process a text file: chunk and generate Q&A pairs.
     Inserts Q&A pairs per-chunk and reports progress. Returns total count generated."""
@@ -359,13 +370,14 @@ def _process_text(
         text = f.read()
 
     chunks = chunk_text(text)
-    items_count = 0
+    format_instructions = _build_format_instructions(context)
 
+    # Phase 1: create chunks and prepare prompts (fast, sequential)
+    work_items: list[tuple[str, list[dict]]] = []  # (chunk_id, content_blocks)
     for i, chunk_text_content in enumerate(chunks):
         if not chunk_text_content.strip():
             continue
 
-        # Store chunk
         chunk = client.create_chunk(
             upload_id=upload["id"],
             chunk_index=i,
@@ -377,17 +389,25 @@ def _process_text(
             n=qa_per_chunk,
             context_section=context_section,
             content=chunk_text_content,
-            format_instructions=_build_format_instructions(context),
+            format_instructions=format_instructions,
         )
+        work_items.append((chunk["id"], [{"type": "text", "text": prompt_text}]))
 
-        content_blocks = [{"type": "text", "text": prompt_text}]
-        qa_pairs = _call_llm(llm, content_blocks, use_vision=False)
-
-        count = _insert_and_report(
-            client, project_id, job_id, chunk["id"], qa_pairs,
-            file_idx, total_files, running_total + items_count,
-        )
-        items_count += count
+    # Phase 2: parallel LLM calls
+    items_count = 0
+    with concurrent.futures.ThreadPoolExecutor(max_workers=concurrency) as executor:
+        future_to_chunk = {
+            executor.submit(_call_llm, llm, content_blocks, False): chunk_id
+            for chunk_id, content_blocks in work_items
+        }
+        for future in concurrent.futures.as_completed(future_to_chunk):
+            chunk_id = future_to_chunk[future]
+            qa_pairs = future.result()
+            count = _insert_and_report(
+                client, project_id, job_id, chunk_id, qa_pairs,
+                file_idx, total_files, running_total + items_count,
+            )
+            items_count += count
 
     return items_count
 
