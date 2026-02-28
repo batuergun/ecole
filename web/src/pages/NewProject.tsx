@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
 import { api } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -31,7 +32,11 @@ export default function NewProject() {
       }),
     onSuccess: (project) => {
       queryClient.invalidateQueries({ queryKey: ["projects"] });
+      toast.success("Project created");
       navigate(`/projects/${project.id}`);
+    },
+    onError: (err: Error) => {
+      toast.error(err.message || "Failed to create project");
     },
   });
 

@@ -1,5 +1,7 @@
 import { Link, useLocation } from "react-router-dom";
-import { LayoutDashboard, Settings, Plus } from "lucide-react";
+import { LayoutDashboard, Settings, Plus, LogOut } from "lucide-react";
+import { useAuth } from "@/hooks/useAuth";
+import { Button } from "@/components/ui/button";
 
 const navItems = [
   { label: "Projects", href: "/", icon: LayoutDashboard },
@@ -9,6 +11,7 @@ const navItems = [
 
 export function Sidebar() {
   const location = useLocation();
+  const { user, logout } = useAuth();
 
   return (
     <aside className="flex w-56 flex-col border-r border-border bg-sidebar">
@@ -45,7 +48,23 @@ export function Sidebar() {
       </nav>
 
       <div className="border-t border-border p-3">
-        <div className="px-3 py-2 text-xs text-muted-foreground font-mono">
+        {user && (
+          <div className="flex items-center justify-between px-3 py-2">
+            <div className="min-w-0">
+              <p className="text-xs font-medium truncate">{user.name}</p>
+              <p className="text-xs text-muted-foreground truncate">{user.email}</p>
+            </div>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={logout}
+              className="shrink-0 h-7 w-7 p-0"
+            >
+              <LogOut className="h-3.5 w-3.5" />
+            </Button>
+          </div>
+        )}
+        <div className="px-3 py-1 text-xs text-muted-foreground font-mono">
           v0.1.0
         </div>
       </div>

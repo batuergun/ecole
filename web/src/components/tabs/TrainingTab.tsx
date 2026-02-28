@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
 import { api, type TrainingRun } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -51,6 +52,10 @@ export function TrainingTab({ projectId }: { projectId: string }) {
       }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["training-runs", projectId] });
+      toast.success("Training started");
+    },
+    onError: (err: Error) => {
+      toast.error(err.message || "Failed to start training");
     },
   });
 
@@ -58,6 +63,10 @@ export function TrainingTab({ projectId }: { projectId: string }) {
     mutationFn: (runId: string) => api.uploadToHF(projectId, runId),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["training-runs", projectId] });
+      toast.success("HuggingFace upload started");
+    },
+    onError: (err: Error) => {
+      toast.error(err.message || "Failed to start HF upload");
     },
   });
 
@@ -65,6 +74,10 @@ export function TrainingTab({ projectId }: { projectId: string }) {
     mutationFn: (runId: string) => api.triggerBenchmark(projectId, runId),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["benchmarks", projectId] });
+      toast.success("Benchmark started");
+    },
+    onError: (err: Error) => {
+      toast.error(err.message || "Failed to start benchmark");
     },
   });
 

@@ -1,5 +1,6 @@
 import { useCallback } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
 import { api, type Upload } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -16,8 +17,12 @@ export function DataTab({ projectId }: { projectId: string }) {
 
   const uploadMutation = useMutation({
     mutationFn: (file: File) => api.uploadFile(projectId, file),
-    onSuccess: () => {
+    onSuccess: (_data, file) => {
       queryClient.invalidateQueries({ queryKey: ["uploads", projectId] });
+      toast.success(`Uploaded ${file.name}`);
+    },
+    onError: (_err: Error, file) => {
+      toast.error(`Failed to upload ${file.name}`);
     },
   });
 
@@ -25,6 +30,10 @@ export function DataTab({ projectId }: { projectId: string }) {
     mutationFn: (uploadId: string) => api.deleteUpload(projectId, uploadId),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["uploads", projectId] });
+      toast.success("File deleted");
+    },
+    onError: (err: Error) => {
+      toast.error(err.message || "Failed to delete file");
     },
   });
 
@@ -68,7 +77,7 @@ export function DataTab({ projectId }: { projectId: string }) {
             variant="outline"
             className="pointer-events-none"
           >
-            Select Files
+            {uploadMutation.isPending ? "Uploading..." : "Select Files"}
           </Button>
         </label>
       </div>

@@ -23,6 +23,8 @@ async function request<T>(
 export const api = {
   // Auth
   me: () => request<User>("/auth/me"),
+  login: () => request<{ url?: string; dev_mode?: boolean }>("/auth/login"),
+  logout: () => request("/auth/logout", { method: "POST" }),
 
   // Projects
   listProjects: () => request<Project[]>("/projects"),

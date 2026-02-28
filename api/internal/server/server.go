@@ -20,7 +20,7 @@ func New(cfg *config.Config, s *store.Store, st *storage.Storage, q *queue.Queue
 	})
 
 	// Handlers
-	authH := handler.NewAuthHandler(s)
+	authH := handler.NewAuthHandler(s, cfg)
 	projectH := handler.NewProjectHandler(s)
 	uploadH := handler.NewUploadHandler(s, st)
 	datasetH := handler.NewDatasetHandler(s)
@@ -33,6 +33,9 @@ func New(cfg *config.Config, s *store.Store, st *storage.Storage, q *queue.Queue
 	// Auth routes (no auth middleware)
 	auth := r.Group("/api/auth")
 	{
+		auth.GET("/login", authH.Login)
+		auth.GET("/callback", authH.Callback)
+		auth.POST("/logout", authH.Logout)
 		auth.GET("/me", middleware.Auth(cfg, s), authH.Me)
 	}
 

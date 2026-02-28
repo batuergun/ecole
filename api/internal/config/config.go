@@ -3,24 +3,28 @@ package config
 import "os"
 
 type Config struct {
-	Port          string
-	DatabaseURL   string
-	StoragePath   string
-	CORSOrigin    string
-	EncryptionKey string
-	WorkOSAPIKey  string
-	WorkOSClientID string
+	Port             string
+	DatabaseURL      string
+	StoragePath      string
+	CORSOrigin       string
+	EncryptionKey    string
+	WorkOSAPIKey     string
+	WorkOSClientID   string
+	WorkOSRedirectURI string
+	JWTSecret        string
 }
 
 func Load() *Config {
 	return &Config{
-		Port:           getEnv("PORT", "8080"),
-		DatabaseURL:    getEnv("DATABASE_URL", "postgres://ecole:ecole_dev@localhost:5432/ecole?sslmode=disable"),
-		StoragePath:    getEnv("STORAGE_PATH", "./data/uploads"),
-		CORSOrigin:     getEnv("CORS_ORIGIN", "http://localhost:5173"),
-		EncryptionKey:  getEnv("ENCRYPTION_KEY", "dev-encryption-key-change-in-prod"),
-		WorkOSAPIKey:   os.Getenv("WORKOS_API_KEY"),
-		WorkOSClientID: os.Getenv("WORKOS_CLIENT_ID"),
+		Port:              getEnv("PORT", "8080"),
+		DatabaseURL:       getEnv("DATABASE_URL", "postgres://ecole:ecole_dev@localhost:5432/ecole?sslmode=disable"),
+		StoragePath:       getEnv("STORAGE_PATH", "./data/uploads"),
+		CORSOrigin:        getEnv("CORS_ORIGIN", "http://localhost:5173"),
+		EncryptionKey:     getEnv("ENCRYPTION_KEY", "dev-encryption-key-change-in-prod"),
+		WorkOSAPIKey:      os.Getenv("WORKOS_API_KEY"),
+		WorkOSClientID:    os.Getenv("WORKOS_CLIENT_ID"),
+		WorkOSRedirectURI: getEnv("WORKOS_REDIRECT_URI", "http://localhost:5173/api/auth/callback"),
+		JWTSecret:         getEnv("JWT_SECRET", "dev-jwt-secret-change-in-prod"),
 	}
 }
 

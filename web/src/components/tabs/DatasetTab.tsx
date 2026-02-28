@@ -1,4 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
 import { api, type DatasetItem } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -11,12 +12,17 @@ export function DatasetTab({ projectId, projectStatus }: { projectId: string; pr
   const { data, isLoading } = useQuery({
     queryKey: ["dataset", projectId],
     queryFn: () => api.listDataset(projectId),
+    refetchInterval: projectStatus === "processing" ? 5000 : false,
   });
 
   const harnessMutation = useMutation({
     mutationFn: () => api.triggerHarness(projectId),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["project", projectId] });
+      toast.success("Dataset generation started");
+    },
+    onError: (err: Error) => {
+      toast.error(err.message || "Failed to start generation");
     },
   });
 
@@ -24,6 +30,9 @@ export function DatasetTab({ projectId, projectStatus }: { projectId: string; pr
     mutationFn: (itemId: string) => api.deleteDatasetItem(projectId, itemId),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["dataset", projectId] });
+    },
+    onError: (err: Error) => {
+      toast.error(err.message || "Failed to delete item");
     },
   });
 
@@ -37,6 +46,12 @@ export function DatasetTab({ projectId, projectStatus }: { projectId: string; pr
         <div>
           <p className="text-sm text-muted-foreground">
             {total} Q&A pairs generated
+            {isProcessing && (
+              <span className="ml-2 inline-flex items-center gap-1.5">
+                <span className="h-1.5 w-1.5 bg-ecole-orange animate-pulse" />
+                generating...
+              </span>
+            )}
           </p>
         </div>
         <Button
