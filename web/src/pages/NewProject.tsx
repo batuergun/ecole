@@ -26,6 +26,7 @@ export default function NewProject() {
   const [responseFormat, setResponseFormat] = useState("");
   const [selfAwareness, setSelfAwareness] = useState("");
   const [llmProvider, setLlmProvider] = useState("anthropic");
+  const [qaPerChunk, setQaPerChunk] = useState("10");
 
   const mutation = useMutation({
     mutationFn: () =>
@@ -37,6 +38,7 @@ export default function NewProject() {
           response_format: responseFormat,
           self_awareness: selfAwareness,
           llm_provider: llmProvider,
+          qa_per_chunk: qaPerChunk,
         },
       }),
     onSuccess: (project) => {
@@ -110,6 +112,21 @@ export default function NewProject() {
               </Select>
               <p className="mt-1 text-xs text-muted-foreground">
                 Used for Q&A generation and LLM-as-judge benchmarking
+              </p>
+            </div>
+            <div>
+              <Label htmlFor="qa-per-chunk">Q&A Pairs per Chunk</Label>
+              <Input
+                id="qa-per-chunk"
+                type="number"
+                min={1}
+                max={20}
+                value={qaPerChunk}
+                onChange={(e) => setQaPerChunk(e.target.value)}
+              />
+              <p className="mt-1 text-xs text-muted-foreground">
+                Number of question-answer pairs generated per text chunk. Higher
+                values produce more training data per document.
               </p>
             </div>
             <div>
