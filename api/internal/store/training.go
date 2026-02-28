@@ -119,3 +119,8 @@ func (s *Store) SetTrainingHFRepo(ctx context.Context, id, repoID string) error 
 	`, id, repoID)
 	return err
 }
+
+func (s *Store) DeleteTrainingRun(ctx context.Context, id, projectID string) error {
+	_, err := s.pool.Exec(ctx, `DELETE FROM training_runs WHERE id = $1 AND project_id = $2`, id, projectID)
+	return err
+}

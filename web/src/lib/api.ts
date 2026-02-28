@@ -89,6 +89,8 @@ export const api = {
     request<TrainingRun[]>(`/projects/${projectId}/training`),
   getTrainingRun: (projectId: string, runId: string) =>
     request<TrainingRun>(`/projects/${projectId}/training/${runId}`),
+  deleteTrainingRun: (projectId: string, runId: string) =>
+    request(`/projects/${projectId}/training/${runId}`, { method: "DELETE" }),
   uploadToHF: (projectId: string, runId: string) =>
     request<Job>(`/projects/${projectId}/training/${runId}/upload-hf`, { method: "POST" }),
 

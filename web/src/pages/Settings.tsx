@@ -73,20 +73,20 @@ export default function Settings() {
               </div>
             ) : (
               <>
-                <div>
-                  <Label htmlFor="anthropic">Anthropic API Key</Label>
+                <div className="space-y-1.5">
+                  <Label htmlFor="hf">HuggingFace Token</Label>
                   <Input
-                    id="anthropic"
+                    id="hf"
                     type="password"
-                    value={anthropicKey}
-                    onChange={(e) => setAnthropicKey(e.target.value)}
-                    placeholder="sk-ant-..."
+                    value={hfToken}
+                    onChange={(e) => setHfToken(e.target.value)}
+                    placeholder="hf_..."
                   />
                   <p className="mt-1 text-xs text-muted-foreground">
-                    Used for auto-harness (Q&A generation) and auto-benchmark
+                    Required for training, model downloads, and uploading adapters
                   </p>
                 </div>
-                <div>
+                <div className="space-y-1.5">
                   <Label htmlFor="mistral">Mistral API Key</Label>
                   <Input
                     id="mistral"
@@ -99,17 +99,17 @@ export default function Settings() {
                     Alternative to Anthropic for Q&A generation and benchmarking
                   </p>
                 </div>
-                <div>
-                  <Label htmlFor="hf">HuggingFace Token</Label>
+                <div className="space-y-1.5">
+                  <Label htmlFor="anthropic">Anthropic API Key</Label>
                   <Input
-                    id="hf"
+                    id="anthropic"
                     type="password"
-                    value={hfToken}
-                    onChange={(e) => setHfToken(e.target.value)}
-                    placeholder="hf_..."
+                    value={anthropicKey}
+                    onChange={(e) => setAnthropicKey(e.target.value)}
+                    placeholder="sk-ant-..."
                   />
                   <p className="mt-1 text-xs text-muted-foreground">
-                    Used for downloading models and uploading fine-tuned adapters
+                    Used for Q&A generation and benchmarking
                   </p>
                 </div>
               </>

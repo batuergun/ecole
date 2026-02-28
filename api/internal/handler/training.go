@@ -138,6 +138,23 @@ func (h *TrainingHandler) UploadHF(c *gin.Context) {
 	c.JSON(http.StatusCreated, job)
 }
 
+func (h *TrainingHandler) Delete(c *gin.Context) {
+	userID := middleware.GetUserID(c)
+	projectID := c.Param("id")
+	trainingRunID := c.Param("tid")
+
+	if _, err := h.store.GetProject(c.Request.Context(), projectID, userID); err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "project not found"})
+		return
+	}
+
+	if err := h.store.DeleteTrainingRun(c.Request.Context(), trainingRunID, projectID); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to delete training run"})
+		return
+	}
+	c.Status(http.StatusNoContent)
+}
+
 func (h *TrainingHandler) Get(c *gin.Context) {
 	userID := middleware.GetUserID(c)
 	projectID := c.Param("id")

@@ -69,7 +69,7 @@ export default function NewProject() {
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div>
+            <div className="space-y-1.5">
               <Label htmlFor="name">Project Name</Label>
               <Input
                 id="name"
@@ -79,7 +79,7 @@ export default function NewProject() {
                 required
               />
             </div>
-            <div>
+            <div className="space-y-1.5">
               <Label htmlFor="description">Description</Label>
               <Textarea
                 id="description"
@@ -99,7 +99,7 @@ export default function NewProject() {
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div>
+            <div className="space-y-1.5">
               <Label htmlFor="llm-provider">LLM Provider</Label>
               <Select value={llmProvider} onValueChange={setLlmProvider}>
                 <SelectTrigger id="llm-provider">
@@ -114,7 +114,7 @@ export default function NewProject() {
                 Used for Q&A generation and LLM-as-judge benchmarking
               </p>
             </div>
-            <div>
+            <div className="space-y-1.5">
               <Label htmlFor="qa-per-chunk">Q&A Pairs per Chunk</Label>
               <Input
                 id="qa-per-chunk"
@@ -129,7 +129,7 @@ export default function NewProject() {
                 values produce more training data per document.
               </p>
             </div>
-            <div>
+            <div className="space-y-1.5">
               <Label htmlFor="purpose">Model Purpose</Label>
               <Textarea
                 id="purpose"
@@ -139,7 +139,7 @@ export default function NewProject() {
                 rows={3}
               />
             </div>
-            <div>
+            <div className="space-y-1.5">
               <Label htmlFor="format">Expected Response Format</Label>
               <Textarea
                 id="format"
@@ -149,7 +149,7 @@ export default function NewProject() {
                 rows={2}
               />
             </div>
-            <div>
+            <div className="space-y-1.5">
               <Label htmlFor="awareness">Self-Awareness Instructions</Label>
               <Textarea
                 id="awareness"

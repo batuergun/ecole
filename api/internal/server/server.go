@@ -73,6 +73,7 @@ func New(cfg *config.Config, s *store.Store, st *storage.Storage, q *queue.Queue
 		api.POST("/projects/:id/training", trainingH.Launch)
 		api.GET("/projects/:id/training", trainingH.List)
 		api.GET("/projects/:id/training/:tid", trainingH.Get)
+		api.DELETE("/projects/:id/training/:tid", trainingH.Delete)
 		api.POST("/projects/:id/training/:tid/upload-hf", trainingH.UploadHF)
 
 		// Benchmark
