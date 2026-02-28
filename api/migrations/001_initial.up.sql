@@ -77,6 +77,7 @@ CREATE TABLE training_runs (
     training_config   JSONB NOT NULL DEFAULT '{"num_train_epochs":3,"per_device_train_batch_size":4,"learning_rate":1e-4,"warmup_ratio":0.1,"max_seq_length":2048,"gradient_accumulation_steps":4,"logging_steps":10,"bf16":true}',
     compute_mode      TEXT NOT NULL DEFAULT 'local'
                       CHECK (compute_mode IN ('local','hf_jobs')),
+    hf_namespace      TEXT,
     hf_job_id         TEXT,
     worker_id         UUID,
     status            TEXT NOT NULL DEFAULT 'pending'

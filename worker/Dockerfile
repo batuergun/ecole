@@ -1,7 +1,7 @@
-FROM nvidia/cuda:12.4.0-runtime-ubuntu22.04
+FROM python:3.11-slim
 
 RUN apt-get update && \
-    apt-get install -y python3.11 python3-pip git && \
+    apt-get install -y git && \
     rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app

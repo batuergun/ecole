@@ -24,6 +24,7 @@ type launchTrainingRequest struct {
 	LoRAConfig     json.RawMessage `json:"lora_config"`
 	TrainingConfig json.RawMessage `json:"training_config"`
 	ComputeMode    string          `json:"compute_mode"`
+	HFNamespace    string          `json:"hf_namespace"`
 }
 
 func (h *TrainingHandler) Launch(c *gin.Context) {
@@ -54,7 +55,12 @@ func (h *TrainingHandler) Launch(c *gin.Context) {
 		req.TrainingConfig = json.RawMessage(`{"num_train_epochs":3,"per_device_train_batch_size":4,"learning_rate":1e-4,"warmup_ratio":0.1,"max_seq_length":2048,"gradient_accumulation_steps":4,"logging_steps":10,"bf16":true}`)
 	}
 
-	run, err := h.store.CreateTrainingRun(c.Request.Context(), projectID, req.BaseModel, req.ComputeMode, req.LoRAConfig, req.TrainingConfig)
+	var hfNamespace *string
+	if req.HFNamespace != "" {
+		hfNamespace = &req.HFNamespace
+	}
+
+	run, err := h.store.CreateTrainingRun(c.Request.Context(), projectID, req.BaseModel, req.ComputeMode, hfNamespace, req.LoRAConfig, req.TrainingConfig)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create training run"})
 		return

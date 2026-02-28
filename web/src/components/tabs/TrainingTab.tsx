@@ -27,6 +27,7 @@ export function TrainingTab({ projectId }: { projectId: string }) {
   const [batchSize, setBatchSize] = useState("4");
   const [loraR, setLoraR] = useState("16");
   const [computeMode, setComputeMode] = useState("local");
+  const [hfNamespace, setHfNamespace] = useState("");
 
   const { data: runs } = useQuery({
     queryKey: ["training-runs", projectId],
@@ -55,6 +56,7 @@ export function TrainingTab({ projectId }: { projectId: string }) {
           bf16: true,
         },
         compute_mode: computeMode,
+        ...(computeMode === "hf_jobs" && hfNamespace ? { hf_namespace: hfNamespace } : {}),
       }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["training-runs", projectId] });
@@ -168,10 +170,23 @@ export function TrainingTab({ projectId }: { projectId: string }) {
             </div>
 
             {computeMode === "hf_jobs" && (
-              <p className="text-xs text-muted-foreground border border-border p-2">
-                Requires HuggingFace Pro or Enterprise. Training will run on HF infrastructure
-                ({baseModel.includes("8B") ? "A10G Large" : "A10G Small"} GPU). Configure your HF token in Settings.
-              </p>
+              <>
+                <div>
+                  <Label>Organization Namespace</Label>
+                  <Input
+                    value={hfNamespace}
+                    onChange={(e) => setHfNamespace(e.target.value)}
+                    placeholder="Leave empty for personal account"
+                  />
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Org name to run the job under (billing & ownership). Leave empty to use your personal account.
+                  </p>
+                </div>
+                <p className="text-xs text-muted-foreground border border-border p-2">
+                  Requires HuggingFace Pro or Enterprise. Training will run on HF infrastructure
+                  ({baseModel.includes("8B") ? "A10G Large" : "A10G Small"} GPU). Configure your HF token in Settings.
+                </p>
+              </>
             )}
 
             <Button

@@ -68,6 +68,7 @@ type TrainingRun struct {
 	LoRAConfig      json.RawMessage `json:"lora_config" db:"lora_config"`
 	TrainingConfig  json.RawMessage `json:"training_config" db:"training_config"`
 	ComputeMode     string          `json:"compute_mode" db:"compute_mode"`
+	HFNamespace     *string         `json:"hf_namespace" db:"hf_namespace"`
 	HFJobID         *string         `json:"hf_job_id" db:"hf_job_id"`
 	WorkerID        *string         `json:"worker_id" db:"worker_id"`
 	Status          string          `json:"status" db:"status"`

@@ -47,13 +47,6 @@ services:
     volumes:
       - model_cache:/root/.cache/huggingface
       - uploads:/data/uploads
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              count: all
-              capabilities: [gpu]
     depends_on:
       - api
 

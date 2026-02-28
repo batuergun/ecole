@@ -7,16 +7,16 @@ import (
 	"github.com/batuhanergun/ecole/api/internal/model"
 )
 
-func (s *Store) CreateTrainingRun(ctx context.Context, projectID, baseModel, computeMode string, loraConfig, trainingConfig json.RawMessage) (*model.TrainingRun, error) {
+func (s *Store) CreateTrainingRun(ctx context.Context, projectID, baseModel, computeMode string, hfNamespace *string, loraConfig, trainingConfig json.RawMessage) (*model.TrainingRun, error) {
 	var t model.TrainingRun
 	err := s.pool.QueryRow(ctx, `
-		INSERT INTO training_runs (project_id, base_model, lora_config, training_config, compute_mode)
-		VALUES ($1, $2, $3, $4, $5)
-		RETURNING id, project_id, base_model, lora_config, training_config, compute_mode,
+		INSERT INTO training_runs (project_id, base_model, lora_config, training_config, compute_mode, hf_namespace)
+		VALUES ($1, $2, $3, $4, $5, $6)
+		RETURNING id, project_id, base_model, lora_config, training_config, compute_mode, hf_namespace,
 			hf_job_id, worker_id, status, current_epoch, total_epochs, train_loss,
 			output_model_path, hf_repo_id, error_message, started_at, completed_at, created_at, updated_at
-	`, projectID, baseModel, loraConfig, trainingConfig, computeMode).Scan(
-		&t.ID, &t.ProjectID, &t.BaseModel, &t.LoRAConfig, &t.TrainingConfig, &t.ComputeMode,
+	`, projectID, baseModel, loraConfig, trainingConfig, computeMode, hfNamespace).Scan(
+		&t.ID, &t.ProjectID, &t.BaseModel, &t.LoRAConfig, &t.TrainingConfig, &t.ComputeMode, &t.HFNamespace,
 		&t.HFJobID, &t.WorkerID, &t.Status, &t.CurrentEpoch, &t.TotalEpochs, &t.TrainLoss,
 		&t.OutputModelPath, &t.HFRepoID, &t.ErrorMessage, &t.StartedAt, &t.CompletedAt, &t.CreatedAt, &t.UpdatedAt,
 	)
@@ -29,12 +29,12 @@ func (s *Store) CreateTrainingRun(ctx context.Context, projectID, baseModel, com
 func (s *Store) GetTrainingRunByID(ctx context.Context, id string) (*model.TrainingRun, error) {
 	var t model.TrainingRun
 	err := s.pool.QueryRow(ctx, `
-		SELECT id, project_id, base_model, lora_config, training_config, compute_mode,
+		SELECT id, project_id, base_model, lora_config, training_config, compute_mode, hf_namespace,
 			hf_job_id, worker_id, status, current_epoch, total_epochs, train_loss,
 			output_model_path, hf_repo_id, error_message, started_at, completed_at, created_at, updated_at
 		FROM training_runs WHERE id = $1
 	`, id).Scan(
-		&t.ID, &t.ProjectID, &t.BaseModel, &t.LoRAConfig, &t.TrainingConfig, &t.ComputeMode,
+		&t.ID, &t.ProjectID, &t.BaseModel, &t.LoRAConfig, &t.TrainingConfig, &t.ComputeMode, &t.HFNamespace,
 		&t.HFJobID, &t.WorkerID, &t.Status, &t.CurrentEpoch, &t.TotalEpochs, &t.TrainLoss,
 		&t.OutputModelPath, &t.HFRepoID, &t.ErrorMessage, &t.StartedAt, &t.CompletedAt, &t.CreatedAt, &t.UpdatedAt,
 	)
@@ -47,12 +47,12 @@ func (s *Store) GetTrainingRunByID(ctx context.Context, id string) (*model.Train
 func (s *Store) GetTrainingRun(ctx context.Context, id, projectID string) (*model.TrainingRun, error) {
 	var t model.TrainingRun
 	err := s.pool.QueryRow(ctx, `
-		SELECT id, project_id, base_model, lora_config, training_config, compute_mode,
+		SELECT id, project_id, base_model, lora_config, training_config, compute_mode, hf_namespace,
 			hf_job_id, worker_id, status, current_epoch, total_epochs, train_loss,
 			output_model_path, hf_repo_id, error_message, started_at, completed_at, created_at, updated_at
 		FROM training_runs WHERE id = $1 AND project_id = $2
 	`, id, projectID).Scan(
-		&t.ID, &t.ProjectID, &t.BaseModel, &t.LoRAConfig, &t.TrainingConfig, &t.ComputeMode,
+		&t.ID, &t.ProjectID, &t.BaseModel, &t.LoRAConfig, &t.TrainingConfig, &t.ComputeMode, &t.HFNamespace,
 		&t.HFJobID, &t.WorkerID, &t.Status, &t.CurrentEpoch, &t.TotalEpochs, &t.TrainLoss,
 		&t.OutputModelPath, &t.HFRepoID, &t.ErrorMessage, &t.StartedAt, &t.CompletedAt, &t.CreatedAt, &t.UpdatedAt,
 	)
@@ -64,7 +64,7 @@ func (s *Store) GetTrainingRun(ctx context.Context, id, projectID string) (*mode
 
 func (s *Store) ListTrainingRuns(ctx context.Context, projectID string) ([]model.TrainingRun, error) {
 	rows, err := s.pool.Query(ctx, `
-		SELECT id, project_id, base_model, lora_config, training_config, compute_mode,
+		SELECT id, project_id, base_model, lora_config, training_config, compute_mode, hf_namespace,
 			hf_job_id, worker_id, status, current_epoch, total_epochs, train_loss,
 			output_model_path, hf_repo_id, error_message, started_at, completed_at, created_at, updated_at
 		FROM training_runs WHERE project_id = $1 ORDER BY created_at DESC
@@ -78,7 +78,7 @@ func (s *Store) ListTrainingRuns(ctx context.Context, projectID string) ([]model
 	for rows.Next() {
 		var t model.TrainingRun
 		if err := rows.Scan(
-			&t.ID, &t.ProjectID, &t.BaseModel, &t.LoRAConfig, &t.TrainingConfig, &t.ComputeMode,
+			&t.ID, &t.ProjectID, &t.BaseModel, &t.LoRAConfig, &t.TrainingConfig, &t.ComputeMode, &t.HFNamespace,
 			&t.HFJobID, &t.WorkerID, &t.Status, &t.CurrentEpoch, &t.TotalEpochs, &t.TrainLoss,
 			&t.OutputModelPath, &t.HFRepoID, &t.ErrorMessage, &t.StartedAt, &t.CompletedAt, &t.CreatedAt, &t.UpdatedAt,
 		); err != nil {

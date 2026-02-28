@@ -158,6 +158,7 @@ export interface TrainingRun {
   lora_config: Record<string, unknown>;
   training_config: Record<string, unknown>;
   compute_mode: string;
+  hf_namespace: string | null;
   status: string;
   current_epoch: number;
   total_epochs: number | null;
@@ -175,6 +176,7 @@ export interface LaunchTrainingInput {
   lora_config?: Record<string, unknown>;
   training_config?: Record<string, unknown>;
   compute_mode?: string;
+  hf_namespace?: string;
 }
 
 export interface Benchmark {

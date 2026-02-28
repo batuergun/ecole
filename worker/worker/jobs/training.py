@@ -85,11 +85,18 @@ def _run_hf_jobs(
     project_name = project.get("name", "model").lower().replace(" ", "-")
     model_short = base_model.split("/")[-1].lower()
 
+    hf_namespace = run_info.get("hf_namespace")
+
     from huggingface_hub import HfApi
     hf_api = HfApi(token=hf_token)
-    user_info = hf_api.whoami()
-    username = user_info.get("name", user_info.get("user", "user"))
-    output_repo = f"{username}/ecole-{project_name}-{model_short}"
+
+    if hf_namespace:
+        owner = hf_namespace
+    else:
+        user_info = hf_api.whoami()
+        owner = user_info.get("name", user_info.get("user", "user"))
+
+    output_repo = f"{owner}/ecole-{project_name}-{model_short}"
 
     # Select GPU flavor
     flavor = HF_JOB_FLAVORS.get(base_model, "a10g-small")
@@ -102,8 +109,7 @@ def _run_hf_jobs(
     print(f"[training:hf_jobs] Dispatching to HF Jobs: flavor={flavor}, timeout={timeout}")
 
     # Dispatch the job
-    hf_job = run_uv_job(
-        HF_JOB_ENTRY_SCRIPT,
+    job_kwargs = dict(
         flavor=flavor,
         timeout=timeout,
         env={
@@ -116,6 +122,10 @@ def _run_hf_jobs(
         secrets={"HF_TOKEN": hf_token},
         token=hf_token,
     )
+    if hf_namespace:
+        job_kwargs["namespace"] = hf_namespace
+
+    hf_job = run_uv_job(HF_JOB_ENTRY_SCRIPT, **job_kwargs)
 
     hf_job_id = hf_job.id
     print(f"[training:hf_jobs] Dispatched HF Job: {hf_job_id} — {hf_job.url}")

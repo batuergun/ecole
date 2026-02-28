@@ -1,8 +1,12 @@
-.PHONY: dev dev-web dev-api dev-worker db migrate up down clean
+.PHONY: dev dev-web dev-api dev-worker db migrate up up-gpu down clean
 
 # Start all services via Docker Compose
 up:
 	docker compose up -d
+
+# Start with NVIDIA GPU support for local training
+up-gpu:
+	docker compose -f docker-compose.yml -f docker-compose.gpu.yml up -d
 
 down:
 	docker compose down

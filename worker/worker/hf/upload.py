@@ -46,17 +46,23 @@ def run(client: APIClient, job: dict) -> None:
     if not hf_token:
         raise ValueError("No HuggingFace token configured. Set it in Settings or HF_TOKEN env var.")
 
-    # Build repo ID: user/ecole-{project_name}-{model_short}
+    # Build repo ID: {namespace}/ecole-{project_name}-{model_short}
     project = client.get_project(project_id)
     project_name = project.get("name", "model").lower().replace(" ", "-")
     model_short = run_info["base_model"].split("/")[-1].lower()
-    repo_id = f"ecole-{project_name}-{model_short}"
+    repo_name = f"ecole-{project_name}-{model_short}"
 
-    # Get HF username
+    # Use namespace if set, otherwise fall back to HF username
+    hf_namespace = run_info.get("hf_namespace")
     hf_api = HfApi(token=hf_token)
-    user_info = hf_api.whoami()
-    username = user_info.get("name", user_info.get("user", "user"))
-    full_repo_id = f"{username}/{repo_id}"
+
+    if hf_namespace:
+        owner = hf_namespace
+    else:
+        user_info = hf_api.whoami()
+        owner = user_info.get("name", user_info.get("user", "user"))
+
+    full_repo_id = f"{owner}/{repo_name}"
 
     print(f"[hf_upload] Pushing to {full_repo_id}")
 
