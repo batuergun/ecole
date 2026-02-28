@@ -219,7 +219,7 @@ def _run_hf_jobs(
         # Fetch logs for running/completed/error stages
         if stage in ("RUNNING", "COMPLETED", "ERROR"):
             try:
-                log_text = fetch_job_logs(job_id=hf_job_id, token=hf_token)
+                log_text = "".join(fetch_job_logs(job_id=hf_job_id, token=hf_token))
                 if log_text:
                     accumulated_logs = log_text
                     client.update_training_logs(training_run_id, accumulated_logs)

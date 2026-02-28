@@ -339,31 +339,19 @@ export function DatasetTab({
     <div className="space-y-4">
       {/* Header */}
       {total > 0 ? (
-        <div className="flex items-center justify-between">
-          <StatsBar projectId={projectId} />
-          {isProcessing && (
-            <Button
-              onClick={() => harnessMutation.mutate()}
-              disabled={isProcessing || harnessMutation.isPending}
-              className="bg-ecole-orange text-white hover:bg-ecole-orange-light"
-            >
-              <Sparkles className="mr-2 h-4 w-4" />
-              Generating...
-            </Button>
-          )}
-        </div>
-      ) : (
-        <div className="flex flex-col items-center justify-center py-8">
+        <StatsBar projectId={projectId} />
+      ) : !isProcessing ? (
+        <div className="flex justify-center py-2">
           <Button
             onClick={() => harnessMutation.mutate()}
-            disabled={isProcessing || harnessMutation.isPending}
+            disabled={harnessMutation.isPending}
             className="bg-ecole-orange text-white hover:bg-ecole-orange-light"
           >
             <Sparkles className="mr-2 h-4 w-4" />
-            {isProcessing ? "Generating..." : "Generate Dataset"}
+            Generate Dataset
           </Button>
         </div>
-      )}
+      ) : null}
 
       {/* Generation Progress */}
       {isProcessing && (
@@ -526,13 +514,6 @@ export function DatasetTab({
               </div>
             </div>
           )}
-        </div>
-      ) : items.length === 0 && !isProcessing ? (
-        <div className="flex flex-col items-center justify-center py-12 text-center">
-          <p className="text-sm text-muted-foreground">
-            No dataset generated yet. Upload data first, then click "Generate
-            Dataset".
-          </p>
         </div>
       ) : search && filteredItems.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-8 text-center">

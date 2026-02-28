@@ -23,10 +23,11 @@ import {
   Cpu,
   Trash2,
   Settings,
-  ExternalLink,
+
   Plus,
   Clock,
   AlertTriangle,
+  Database,
 } from "lucide-react";
 
 function formatStatus(s: string): string {
@@ -403,15 +404,15 @@ export function TrainingTab({ projectId }: { projectId: string }) {
 
                 {/* HF Job + Dataset links for HF jobs */}
                 {run.compute_mode === "hf_jobs" && (run.hf_job_id || run.hf_dataset_repo) && (
-                  <div className="mt-2 flex items-center gap-3">
-                    {isActive && run.hf_job_id && (
+                  <div className="mt-2 flex flex-col gap-1">
+                    {run.hf_job_id && (
                       <a
                         href={run.hf_job_id}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="inline-flex items-center gap-1 text-xs text-ecole-orange hover:underline font-mono"
+                        className="inline-flex items-center gap-1.5 text-xs text-ecole-orange hover:underline font-mono"
                       >
-                        <ExternalLink className="h-3 w-3" />
+                        <Cloud className="h-3 w-3" />
                         View job on HuggingFace
                       </a>
                     )}
@@ -420,9 +421,9 @@ export function TrainingTab({ projectId }: { projectId: string }) {
                         href={`https://huggingface.co/datasets/${run.hf_dataset_repo}`}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="inline-flex items-center gap-1 text-xs text-ecole-orange hover:underline font-mono"
+                        className="inline-flex items-center gap-1.5 text-xs text-ecole-orange hover:underline font-mono"
                       >
-                        <ExternalLink className="h-3 w-3" />
+                        <Database className="h-3 w-3" />
                         View dataset on HuggingFace
                       </a>
                     )}
