@@ -1,0 +1,41 @@
+# Dependencies
+node_modules/
+
+# Build outputs
+web/dist/
+api/bin/
+
+# Go
+api/tmp/
+
+# Python
+__pycache__/
+*.pyc
+*.egg-info/
+.venv/
+venv/
+
+# Data
+data/
+
+# Environment
+.env
+.env.*
+!.env.example
+
+# IDE
+.idea/
+.vscode/
+*.swp
+
+# OS
+.DS_Store
+
+# Claude
+.claude/
+
+# Docker
+docker-compose.override.yml
+
+# plan md
+plans/
