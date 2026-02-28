@@ -132,16 +132,16 @@ export default function ProjectDetail() {
 
       <Tabs defaultValue="data">
         <TabsList className="border border-border bg-transparent">
-          <TabsTrigger value="data" className="font-mono text-xs uppercase data-[state=active]:bg-secondary">
+          <TabsTrigger value="data" className="font-mono text-xs data-[state=active]:bg-secondary">
             Data
           </TabsTrigger>
-          <TabsTrigger value="dataset" className="font-mono text-xs uppercase data-[state=active]:bg-secondary">
+          <TabsTrigger value="dataset" className="font-mono text-xs data-[state=active]:bg-secondary">
             Dataset
           </TabsTrigger>
-          <TabsTrigger value="training" className="font-mono text-xs uppercase data-[state=active]:bg-secondary">
+          <TabsTrigger value="training" className="font-mono text-xs data-[state=active]:bg-secondary">
             Training
           </TabsTrigger>
-          <TabsTrigger value="benchmark" className="font-mono text-xs uppercase data-[state=active]:bg-secondary">
+          <TabsTrigger value="benchmark" className="font-mono text-xs data-[state=active]:bg-secondary">
             Benchmark
           </TabsTrigger>
         </TabsList>

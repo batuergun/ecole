@@ -61,7 +61,7 @@ export default function Settings() {
       >
         <Card>
           <CardHeader>
-            <CardTitle className="text-sm font-mono uppercase tracking-widest text-muted-foreground">
+            <CardTitle className="text-sm font-mono tracking-wide text-muted-foreground">
               API Keys
             </CardTitle>
           </CardHeader>

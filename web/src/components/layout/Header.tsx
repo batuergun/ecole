@@ -39,7 +39,7 @@ export function Header() {
 
   return (
     <header className="flex h-14 items-center justify-between border-b border-border px-6">
-      <h1 className="text-sm font-mono font-medium text-foreground uppercase tracking-widest">
+      <h1 className="text-sm font-mono font-medium text-foreground tracking-wide">
         {title}
       </h1>
       <Button

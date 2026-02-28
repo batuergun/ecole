@@ -75,9 +75,9 @@ export function DatasetTab({ projectId, projectStatus }: { projectId: string; pr
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead className="font-mono text-xs uppercase">Question</TableHead>
-                <TableHead className="font-mono text-xs uppercase">Answer</TableHead>
-                <TableHead className="font-mono text-xs uppercase w-20">Type</TableHead>
+                <TableHead className="font-mono text-xs">Question</TableHead>
+                <TableHead className="font-mono text-xs">Answer</TableHead>
+                <TableHead className="font-mono text-xs w-20">Type</TableHead>
                 <TableHead className="w-12" />
               </TableRow>
             </TableHeader>

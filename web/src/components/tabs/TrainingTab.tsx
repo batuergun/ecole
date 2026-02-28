@@ -102,7 +102,7 @@ export function TrainingTab({ projectId }: { projectId: string }) {
       {!activeRun && (
         <Card>
           <CardHeader>
-            <CardTitle className="text-sm font-mono uppercase tracking-widest text-muted-foreground">
+            <CardTitle className="text-sm font-mono tracking-wide text-muted-foreground">
               Configure Training
             </CardTitle>
           </CardHeader>
@@ -211,7 +211,7 @@ export function TrainingTab({ projectId }: { projectId: string }) {
 
       {runs && runs.length > 0 && (
         <div className="space-y-3">
-          <h3 className="text-sm font-mono uppercase tracking-widest text-muted-foreground">
+          <h3 className="text-sm font-mono tracking-wide text-muted-foreground">
             Training Runs
           </h3>
           {runs.map((run: TrainingRun) => (

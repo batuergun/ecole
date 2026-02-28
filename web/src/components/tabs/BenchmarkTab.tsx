@@ -79,7 +79,7 @@ export function BenchmarkTab({ projectId }: { projectId: string }) {
               onClick={() => setExpandedId(expandedId === b.id ? null : b.id)}
               className="w-full text-left"
             >
-              <h3 className="text-sm font-mono uppercase tracking-widest text-muted-foreground mb-2 hover:text-foreground transition-colors">
+              <h3 className="text-sm font-mono tracking-wide text-muted-foreground mb-2 hover:text-foreground transition-colors">
                 {b.model_type === "base" ? "Base" : "Fine-tuned"} — Per-Question Results
                 <span className="ml-2 text-xs">
                   {expandedId === b.id ? "[-]" : "[+]"}
@@ -139,7 +139,7 @@ function ScoreCard({
   return (
     <Card className={isHighlighted && benchmark ? "border-ecole-orange" : ""}>
       <CardHeader>
-        <CardTitle className="text-sm font-mono uppercase tracking-widest text-muted-foreground">
+        <CardTitle className="text-sm font-mono tracking-wide text-muted-foreground">
           {title}
         </CardTitle>
       </CardHeader>
