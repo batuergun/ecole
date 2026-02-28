@@ -26,6 +26,7 @@ import {
   ExternalLink,
   Plus,
   Clock,
+  AlertTriangle,
 } from "lucide-react";
 
 function formatStatus(s: string): string {
@@ -78,6 +79,13 @@ export function TrainingTab({ projectId }: { projectId: string }) {
   const [hfFlavor, setHfFlavor] = useState(RECOMMENDED_FLAVORS[MODEL_OPTIONS[0].value] || "a10g-small");
   const [hfNamespace, setHfNamespace] = useState("");
   const [showNewRunDialog, setShowNewRunDialog] = useState(false);
+
+  const { data: keys } = useQuery({
+    queryKey: ["settings-keys"],
+    queryFn: () => api.getKeys(),
+  });
+
+  const hasHfToken = !!keys?.hf_token;
 
   const { data: runs } = useQuery({
     queryKey: ["training-runs", projectId],
@@ -269,9 +277,30 @@ export function TrainingTab({ projectId }: { projectId: string }) {
         </>
       )}
 
+      {computeMode === "hf_jobs" && !hasHfToken && (
+        <div className="flex items-start gap-2.5 border border-yellow-500/30 bg-yellow-500/5 p-3">
+          <AlertTriangle className="h-4 w-4 text-yellow-500 shrink-0 mt-0.5" />
+          <div className="text-xs">
+            <p className="font-medium text-yellow-600 dark:text-yellow-400">HuggingFace token required</p>
+            <p className="text-muted-foreground mt-0.5">
+              Add your HF token in{" "}
+              <button
+                type="button"
+                onClick={() => navigate("/settings")}
+                className="text-ecole-orange hover:underline font-mono inline-flex items-center gap-0.5"
+              >
+                <Settings className="h-3 w-3" />
+                Settings
+              </button>
+              {" "}before launching HF Jobs.
+            </p>
+          </div>
+        </div>
+      )}
+
       <Button
         onClick={() => launchMutation.mutate()}
-        disabled={launchMutation.isPending}
+        disabled={launchMutation.isPending || (computeMode === "hf_jobs" && !hasHfToken)}
         className="w-full bg-ecole-orange text-white hover:bg-ecole-orange-light"
       >
         {computeMode === "hf_jobs" ? (
