@@ -412,6 +412,9 @@ func (h *ChatHandler) createHFEndpoint(sessionID, projectID, baseModel string, h
 			"repository": modelRepo,
 			"task":       "text-generation",
 			"framework":  "pytorch",
+			"image": map[string]any{
+				"huggingface": map[string]any{},
+			},
 		},
 		"provider": map[string]any{
 			"vendor": "aws",
