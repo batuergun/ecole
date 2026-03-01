@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 50" width="200" height="50">
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@700&amp;display=swap');
+  </style>
+  <text
+    x="0"
+    y="35"
+    font-family="'JetBrains Mono', ui-monospace, monospace"
+    font-weight="700"
+    font-size="32"
+    letter-spacing="-0.05em"
+    fill="#000000"
+  >ecole</text>
+  <rect x="140" y="22" width="10" height="10" fill="#FF6B00" />
+</svg>

@@ -1,0 +1,536 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ecole — pitch deck</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    /* ── Reset ── */
+    *, *::before, *::after {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    /* ── Print ── */
+    @page {
+      size: 16in 9in;
+      margin: 0;
+    }
+
+    @media print {
+      body {
+        background: white;
+      }
+      section {
+        margin: 0;
+        box-shadow: none;
+        zoom: 0.4; /* scale 3840px → 16in (1536px at 96dpi) */
+      }
+    }
+
+    /* ── Tokens ── */
+    :root {
+      --white: #ffffff;
+      --black: #0a0a0a;
+      --orange: #FF6B00;
+      --orange-light: #FF8A33;
+      --muted: #737373;
+      --border: #e5e5e5;
+      --surface: #f5f5f5;
+
+      --font-sans: 'Inter', system-ui, sans-serif;
+      --font-mono: 'JetBrains Mono', ui-monospace, monospace;
+
+      --slide-w: 3840px;
+      --slide-h: 2160px;
+      --pad: 200px;
+    }
+
+    body {
+      background: #e5e5e5;
+      font-family: var(--font-sans);
+      color: var(--black);
+      -webkit-print-color-adjust: exact;
+      print-color-adjust: exact;
+    }
+
+    /* ── Slide base ── */
+    section {
+      width: var(--slide-w);
+      height: var(--slide-h);
+      padding: var(--pad);
+      background: var(--white);
+      position: relative;
+      overflow: hidden;
+      page-break-after: always;
+      display: flex;
+      flex-direction: column;
+    }
+
+    @media screen {
+      section {
+        margin: 40px auto;
+        box-shadow: 0 4px 40px rgba(0, 0, 0, 0.12);
+      }
+    }
+
+    section:last-child {
+      page-break-after: auto;
+    }
+
+    /* ── Typography ── */
+    h1, h2, h3, h4 {
+      font-family: var(--font-mono);
+      font-weight: 700;
+      letter-spacing: -0.03em;
+      line-height: 1.1;
+    }
+
+    h1 { font-size: 128px; }
+    h2 { font-size: 96px; }
+    h3 { font-size: 64px; }
+    h4 { font-size: 48px; }
+
+    p {
+      font-size: 42px;
+      line-height: 1.6;
+      color: var(--muted);
+    }
+
+    .label {
+      font-family: var(--font-mono);
+      font-size: 32px;
+      font-weight: 600;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--orange);
+      margin-bottom: 48px;
+    }
+
+    /* ── Logo ── */
+    .logo svg {
+      display: block;
+    }
+
+    .logo-large svg {
+      width: 480px;
+      height: 120px;
+    }
+
+    .logo-small svg {
+      width: 320px;
+      height: 80px;
+    }
+
+    /* ── Accent line ── */
+    .accent-line {
+      width: 120px;
+      height: 8px;
+      background: var(--orange);
+      margin: 64px 0;
+    }
+
+    /* ── Grid helpers ── */
+    .grid-3 {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 80px;
+    }
+
+    .grid-4 {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 64px;
+    }
+
+    /* ── Card ── */
+    .card {
+      border: 3px solid var(--border);
+      padding: 56px;
+      display: flex;
+      flex-direction: column;
+      gap: 28px;
+    }
+
+    .card img {
+      width: 100%;
+      height: 400px;
+      object-fit: cover;
+      object-position: top left;
+      border: 2px solid var(--border);
+    }
+
+    .card .number {
+      font-family: var(--font-mono);
+      font-size: 64px;
+      font-weight: 700;
+      color: var(--orange);
+      line-height: 1;
+    }
+
+    .card h3 {
+      font-size: 48px;
+      margin-bottom: 4px;
+    }
+
+    .card p {
+      font-size: 32px;
+    }
+
+    /* ── Stat block ── */
+    .stat {
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    .stat .value {
+      font-family: var(--font-mono);
+      font-size: 96px;
+      font-weight: 700;
+      color: var(--black);
+      line-height: 1;
+    }
+
+    .stat .desc {
+      font-size: 36px;
+      color: var(--muted);
+    }
+
+    /* ── Slide-specific ── */
+    .slide-title {
+      justify-content: center;
+      align-items: flex-start;
+      gap: 80px;
+    }
+
+    .slide-title .tagline {
+      font-size: 72px;
+      font-family: var(--font-mono);
+      font-weight: 500;
+      letter-spacing: -0.02em;
+      color: var(--black);
+      line-height: 1.3;
+      max-width: 2800px;
+    }
+
+    .slide-title .sub {
+      font-size: 48px;
+      color: var(--muted);
+      max-width: 2400px;
+    }
+
+    .slide-content {
+      justify-content: flex-start;
+      gap: 80px;
+    }
+
+    .slide-content .header {
+      margin-bottom: 16px;
+    }
+
+    .slide-content .body {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+    }
+
+    /* ── Problem bullets ── */
+    .problem-list {
+      list-style: none;
+      display: flex;
+      flex-direction: column;
+      gap: 56px;
+    }
+
+    .problem-list li {
+      font-size: 44px;
+      line-height: 1.5;
+      color: var(--black);
+      padding-left: 56px;
+      position: relative;
+    }
+
+    .problem-list li::before {
+      content: '';
+      position: absolute;
+      left: 0;
+      top: 18px;
+      width: 24px;
+      height: 24px;
+      background: var(--orange);
+    }
+
+    .problem-list li span {
+      color: var(--muted);
+    }
+
+    /* ── Closing slide ── */
+    .slide-closing {
+      justify-content: center;
+      align-items: center;
+      text-align: center;
+      gap: 64px;
+    }
+
+    .slide-closing .cta {
+      font-family: var(--font-mono);
+      font-size: 56px;
+      font-weight: 600;
+      color: var(--black);
+    }
+
+    .slide-closing .contact {
+      font-family: var(--font-mono);
+      font-size: 40px;
+      color: var(--orange);
+    }
+
+    .slide-closing .note {
+      font-size: 36px;
+      color: var(--muted);
+      max-width: 2000px;
+    }
+
+    /* ── Footer ── */
+    .slide-footer {
+      position: absolute;
+      bottom: var(--pad);
+      left: var(--pad);
+      right: var(--pad);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .slide-footer .page {
+      font-family: var(--font-mono);
+      font-size: 28px;
+      color: var(--muted);
+    }
+
+    /* ── Orange dot marker (brand element) ── */
+    .dot {
+      display: inline-block;
+      width: 16px;
+      height: 16px;
+      background: var(--orange);
+      margin-left: 4px;
+      vertical-align: middle;
+    }
+
+    /* ── PDF download button ── */
+    .pdf-btn {
+      position: fixed;
+      top: 24px;
+      right: 24px;
+      z-index: 9999;
+      font-family: var(--font-mono);
+      font-size: 14px;
+      font-weight: 600;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+      color: var(--white);
+      background: var(--black);
+      border: none;
+      padding: 12px 24px;
+      cursor: pointer;
+      transition: background 0.15s;
+    }
+    .pdf-btn:hover { background: var(--orange); }
+    .pdf-btn:disabled { background: var(--muted); cursor: wait; }
+    @media print { .pdf-btn { display: none; } }
+  </style>
+</head>
+<body>
+
+  <!-- ════════════════════════════════════════════
+       SLIDE 1 — TITLE
+       ════════════════════════════════════════════ -->
+  <section class="slide-title" style="justify-content: center; align-items: center;">
+    <div class="logo" style="text-align: center;">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 50" width="720" height="180">
+        <text x="0" y="35" font-family="'JetBrains Mono', ui-monospace, monospace" font-weight="700" font-size="32" letter-spacing="-0.05em" fill="#0a0a0a">ecole</text>
+        <rect x="140" y="22" width="10" height="10" fill="#FF6B00" />
+      </svg>
+    </div>
+    <div class="slide-footer" style="justify-content: center;">
+      <span style="font-family: var(--font-mono); font-size: 28px; font-weight: 600; letter-spacing: 0.15em; text-transform: uppercase; color: var(--muted);">Mistral AI Worldwide Hackathon — Paris</span>
+    </div>
+  </section>
+
+  <!-- ════════════════════════════════════════════
+       SLIDE 2 — PROBLEM
+       ════════════════════════════════════════════ -->
+  <section class="slide-content">
+    <div class="header">
+      <div class="label">The Problem</div>
+      <h2>Fine-tuning is still<br>unreasonably hard.</h2>
+    </div>
+    <div class="body">
+      <ul class="problem-list">
+        <li>
+          Building training datasets from your own documents requires
+          custom pipelines and manual labor.
+          <span>Teams spend weeks on data preparation alone.</span>
+        </li>
+        <li>
+          Setting up GPU infrastructure, configuring training runs,
+          and managing hyperparameters demands deep ML expertise.
+          <span>Most teams don't have it.</span>
+        </li>
+        <li>
+          Evaluating whether your fine-tuned model actually outperforms
+          the base model is ad-hoc and inconsistent.
+          <span>No standardized benchmarking.</span>
+        </li>
+        <li>
+          Deploying and distributing models across your
+          organization involves yet another set of tools.
+          <span>Fragmented workflows slow everything down.</span>
+        </li>
+      </ul>
+    </div>
+    <div class="slide-footer">
+      <span class="page">02</span>
+    </div>
+  </section>
+
+  <!-- ════════════════════════════════════════════
+       SLIDE 3 — SOLUTION
+       ════════════════════════════════════════════ -->
+  <section class="slide-content">
+    <div class="header">
+      <div class="label">The Solution</div>
+      <h2>One platform.<br>Upload to deploy.</h2>
+    </div>
+    <div class="body">
+      <div class="grid-3">
+        <div class="stat">
+          <span class="value">1</span>
+          <span class="desc">unified platform replaces a fragmented stack of tools, scripts, and notebooks</span>
+        </div>
+        <div class="stat">
+          <span class="value">0</span>
+          <span class="desc">ML expertise required — upload your documents and ecole handles the rest</span>
+        </div>
+        <div class="stat">
+          <span class="value">∞</span>
+          <span class="desc">models you can train, evaluate, and push to HuggingFace Hub from one place</span>
+        </div>
+      </div>
+      <div class="accent-line" style="margin-top: 96px;"></div>
+      <p style="max-width: 2800px; font-size: 44px;">
+        ecole automates dataset generation, GPU training, benchmarking, and
+        model distribution — so your team can focus on the problem, not the plumbing.
+      </p>
+    </div>
+    <div class="slide-footer">
+      <span class="page">03</span>
+    </div>
+  </section>
+
+  <!-- ════════════════════════════════════════════
+       SLIDE 4 — HOW IT WORKS
+       ════════════════════════════════════════════ -->
+  <section class="slide-content">
+    <div class="header">
+      <div class="label">How It Works</div>
+      <h2>Four steps to your<br>fine-tuned model.</h2>
+    </div>
+    <div class="body">
+      <div class="grid-4">
+        <div class="card">
+          <img src="screenshots/Screenshot 2026-03-01 at 14.51.41.png" alt="Upload data view">
+          <span class="number">01</span>
+          <h3>Upload</h3>
+          <p>Drop in your PDFs, text files, or documents. ecole ingests and processes them automatically.</p>
+        </div>
+        <div class="card">
+          <img src="screenshots/Screenshot 2026-03-01 at 14.52.34.png" alt="Generated dataset table">
+          <span class="number">02</span>
+          <h3>Generate</h3>
+          <p>AI-powered dataset generation creates high-quality training pairs from your source material.</p>
+        </div>
+        <div class="card">
+          <img src="screenshots/Screenshot 2026-03-01 at 14.54.24.png" alt="Training in progress">
+          <span class="number">03</span>
+          <h3>Train</h3>
+          <p>Launch GPU training runs with optimized defaults. Monitor progress in real time.</p>
+        </div>
+        <div class="card">
+          <img src="screenshots/Screenshot 2026-03-01 at 14.30.17.png" alt="Training metrics dashboard">
+          <span class="number">04</span>
+          <h3>Evaluate</h3>
+          <p>Benchmark against the base model with automated evaluation and detailed metrics.</p>
+        </div>
+      </div>
+    </div>
+    <div class="slide-footer">
+      <span class="page">04</span>
+    </div>
+  </section>
+
+  <!-- ════════════════════════════════════════════
+       SLIDE 5 — CLOSING
+       ════════════════════════════════════════════ -->
+  <section class="slide-closing">
+    <div class="logo logo-large">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 50" width="480" height="120">
+        <text x="0" y="35" font-family="'JetBrains Mono', ui-monospace, monospace" font-weight="700" font-size="32" letter-spacing="-0.05em" fill="#0a0a0a">ecole</text>
+        <rect x="140" y="22" width="10" height="10" fill="#FF6B00" />
+      </svg>
+    </div>
+    <div class="accent-line" style="margin: 32px auto;"></div>
+    <div class="cta">Fine-tuning, simplified<span class="dot"></span></div>
+    <p class="note">
+      From raw documents to production-ready models.<br>
+      No ML expertise required.
+    </p>
+    <div class="contact">github.com/batuhanergun/ecole</div>
+  </section>
+
+  <button class="pdf-btn" id="pdf-btn" onclick="downloadPDF()">Download PDF</button>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <script>
+    async function downloadPDF() {
+      var btn = document.getElementById('pdf-btn');
+      btn.textContent = 'Generating...';
+      btn.disabled = true;
+
+      var slides = document.querySelectorAll('section');
+      var W = 3840, H = 2160;
+      var pdf = new jspdf.jsPDF({
+        orientation: 'landscape',
+        unit: 'px',
+        format: [W, H],
+        hotfixes: ['px_scaling']
+      });
+
+      for (var i = 0; i < slides.length; i++) {
+        if (i > 0) pdf.addPage([W, H], 'landscape');
+        var canvas = await html2canvas(slides[i], {
+          width: W,
+          height: H,
+          scale: 1,
+          useCORS: true,
+          logging: false
+        });
+        pdf.addImage(canvas.toDataURL('image/png'), 'PNG', 0, 0, W, H);
+      }
+
+      pdf.save('ecole-pitch.pdf');
+      btn.textContent = 'Download PDF';
+      btn.disabled = false;
+    }
+  </script>
+
+</body>
+</html>
