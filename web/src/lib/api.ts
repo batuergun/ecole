@@ -97,10 +97,10 @@ export const api = {
     request<Job>(`/projects/${projectId}/training/${runId}/upload-hf`, { method: "POST" }),
 
   // Benchmark
-  triggerBenchmark: (projectId: string, trainingRunId: string) =>
+  triggerBenchmark: (projectId: string, data: TriggerBenchmarkInput) =>
     request(`/projects/${projectId}/benchmark`, {
       method: "POST",
-      body: JSON.stringify({ training_run_id: trainingRunId }),
+      body: JSON.stringify(data),
     }),
   listBenchmarks: (projectId: string) =>
     request<Benchmark[]>(`/projects/${projectId}/benchmark`),
@@ -222,6 +222,13 @@ export interface LaunchTrainingInput {
   base_model?: string;
   lora_config?: Record<string, unknown>;
   training_config?: Record<string, unknown>;
+  compute_mode?: string;
+  hf_flavor?: string;
+  hf_namespace?: string;
+}
+
+export interface TriggerBenchmarkInput {
+  training_run_id: string;
   compute_mode?: string;
   hf_flavor?: string;
   hf_namespace?: string;

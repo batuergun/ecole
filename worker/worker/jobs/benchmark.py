@@ -57,7 +57,15 @@ def run(client: APIClient, job: dict) -> None:
 
     # Get training run info
     run_info = client.get_training_run(training_run_id)
-    compute_mode = run_info.get("compute_mode", "local")
+
+    # Compute mode from payload takes priority, falls back to training run
+    compute_mode = payload.get("compute_mode") or run_info.get("compute_mode", "local")
+
+    # Pass HF-specific overrides from payload into run_info for _run_hf_jobs
+    if payload.get("hf_flavor"):
+        run_info["hf_flavor"] = payload["hf_flavor"]
+    if payload.get("hf_namespace"):
+        run_info["hf_namespace"] = payload["hf_namespace"]
 
     if compute_mode == "hf_jobs":
         _run_hf_jobs(client, job, project_id, training_run_id, run_info)
@@ -278,8 +286,14 @@ def _run_hf_jobs(
     hf_job_url = getattr(hf_job, "url", None) or f"https://huggingface.co/jobs/{hf_job_id}"
     print(f"[benchmark:hf_jobs] Dispatched HF Job: {hf_job_id} — {hf_job_url}")
 
-    # Save HF job URL
+    # Save HF job URL on training run + report progress with URL for frontend
     client.set_hf_job_id(training_run_id, hf_job_url)
+    client.report_progress(job["id"], {
+        "status": "running",
+        "label": "hf_inference",
+        "compute_mode": "hf_jobs",
+        "hf_job_url": hf_job_url,
+    })
 
     # Poll for completion
     poll_interval = 30

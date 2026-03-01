@@ -51,10 +51,16 @@ const MODEL_OPTIONS = [
   { value: "mistralai/Ministral-3-8B-Reasoning-2512", label: "Ministral 8B (Quality)" },
 ];
 
-const COMPUTE_OPTIONS = [
+const IS_CLOUD = import.meta.env.VITE_CLOUD_MODE === "true";
+
+const ALL_COMPUTE_OPTIONS = [
   { value: "local", label: "Local GPU", icon: Monitor, description: "Train on your own GPU" },
   { value: "hf_jobs", label: "HF Jobs", icon: Cloud, description: "Train on HuggingFace infrastructure" },
 ];
+
+const COMPUTE_OPTIONS = IS_CLOUD
+  ? ALL_COMPUTE_OPTIONS.filter((o) => o.value === "hf_jobs")
+  : ALL_COMPUTE_OPTIONS;
 
 const HF_FLAVOR_OPTIONS = [
   { value: "a10g-small", label: "A10G Small", vram: "24 GB", description: "1x NVIDIA A10G" },
@@ -77,7 +83,7 @@ export function TrainingTab({ projectId }: { projectId: string }) {
   const [lr, setLr] = useState("0.0001");
   const [batchSize, setBatchSize] = useState("4");
   const [loraR, setLoraR] = useState("16");
-  const [computeMode, setComputeMode] = useState("local");
+  const [computeMode, setComputeMode] = useState(IS_CLOUD ? "hf_jobs" : "local");
   const [hfFlavor, setHfFlavor] = useState(RECOMMENDED_FLAVORS[MODEL_OPTIONS[0].value] || "a10g-small");
   const [hfNamespace, setHfNamespace] = useState("");
   const [showNewRunDialog, setShowNewRunDialog] = useState(false);

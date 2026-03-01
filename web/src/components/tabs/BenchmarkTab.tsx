@@ -1,10 +1,20 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { api, type Benchmark, type TrainingRun, type Job } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Label } from "@/components/ui/label";
+import { Input } from "@/components/ui/input";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import {
   Select,
   SelectContent,
@@ -12,7 +22,15 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { BarChart3, AlertTriangle, RotateCcw } from "lucide-react";
+import {
+  BarChart3,
+  AlertTriangle,
+  RotateCcw,
+  Cloud,
+  Monitor,
+  Cpu,
+  Settings,
+} from "lucide-react";
 
 interface BenchmarkResult {
   question: string;
@@ -23,6 +41,25 @@ interface BenchmarkResult {
   semantic_similarity: number | null;
   rouge_l: number | null;
 }
+
+const IS_CLOUD = import.meta.env.VITE_CLOUD_MODE === "true";
+
+const ALL_COMPUTE_OPTIONS = [
+  { value: "local", label: "Local GPU", icon: Monitor, description: "Run on your own GPU" },
+  { value: "hf_jobs", label: "HF Jobs", icon: Cloud, description: "Run on HuggingFace infrastructure" },
+];
+
+const COMPUTE_OPTIONS = IS_CLOUD
+  ? ALL_COMPUTE_OPTIONS.filter((o) => o.value === "hf_jobs")
+  : ALL_COMPUTE_OPTIONS;
+
+const HF_FLAVOR_OPTIONS = [
+  { value: "a10g-small", label: "A10G Small", vram: "24 GB", description: "1x NVIDIA A10G" },
+  { value: "a10g-large", label: "A10G Large", vram: "24 GB", description: "1x A10G + more CPU/RAM" },
+  { value: "l4x1", label: "L4 x1", vram: "24 GB", description: "1x NVIDIA L4" },
+  { value: "l4x4", label: "L4 x4", vram: "96 GB", description: "4x NVIDIA L4" },
+  { value: "a100-large", label: "A100 Large", vram: "80 GB", description: "1x NVIDIA A100" },
+];
 
 function formatRunLabel(run: TrainingRun): string {
   const name = run.base_model.split("/").pop() ?? run.base_model;
@@ -41,8 +78,15 @@ function formatDate(dateStr: string): string {
 
 export function BenchmarkTab({ projectId }: { projectId: string }) {
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [selectedRunId, setSelectedRunId] = useState<string | null>(null);
+  const [showLaunchDialog, setShowLaunchDialog] = useState(false);
+
+  // Launch modal state
+  const [computeMode, setComputeMode] = useState(IS_CLOUD ? "hf_jobs" : "local");
+  const [hfFlavor, setHfFlavor] = useState("a10g-small");
+  const [hfNamespace, setHfNamespace] = useState("");
 
   const { data: benchmarks, isLoading } = useQuery({
     queryKey: ["benchmarks", projectId],
@@ -61,13 +105,33 @@ export function BenchmarkTab({ projectId }: { projectId: string }) {
     refetchInterval: 5000,
   });
 
+  const { data: keys } = useQuery({
+    queryKey: ["settings-keys"],
+    queryFn: () => api.getKeys(),
+  });
+
+  const hasHfToken = !!keys?.hf_token;
+
   const evaluateMutation = useMutation({
-    mutationFn: (runId: string) => api.triggerBenchmark(projectId, runId),
+    mutationFn: () => {
+      if (!effectiveSelectedId) throw new Error("No run selected");
+      return api.triggerBenchmark(projectId, {
+        training_run_id: effectiveSelectedId,
+        compute_mode: computeMode,
+        ...(computeMode === "hf_jobs" ? { hf_flavor: hfFlavor } : {}),
+        ...(computeMode === "hf_jobs" && hfNamespace ? { hf_namespace: hfNamespace } : {}),
+      });
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["benchmarks", projectId] });
       queryClient.invalidateQueries({ queryKey: ["benchmark-job", projectId] });
+      setShowLaunchDialog(false);
       setSelectedRunId(null);
-      toast.success("Evaluation started");
+      toast.success(
+        computeMode === "hf_jobs"
+          ? "Evaluation dispatched to HF Jobs"
+          : "Evaluation started"
+      );
     },
     onError: (err: Error) => {
       toast.error(err.message || "Failed to start evaluation");
@@ -79,13 +143,15 @@ export function BenchmarkTab({ projectId }: { projectId: string }) {
   const failedBenchmarks = benchmarks?.filter((b: Benchmark) => b.status === "failed") ?? [];
   const hasAnyCompleted = benchmarks?.some((b: Benchmark) => b.status === "completed") ?? false;
 
-  // Check if a benchmark job is actively running (pending/claimed/running in the jobs table)
+  // Check if a benchmark job is actively running
   const jobIsActive = benchmarkJob != null &&
     ["pending", "claimed", "running"].includes(benchmarkJob.status);
   const jobFailed = benchmarkJob != null && benchmarkJob.status === "failed";
 
-  // Only count a run as "evaluated" if it has at least one successful benchmark
-  // Runs with only failed benchmarks should be retryable
+  // Parse HF job URL from the progress_data if available
+  const hfJobUrl = benchmarkJob?.progress_data?.hf_job_url as string | undefined;
+  const jobComputeMode = benchmarkJob?.progress_data?.compute_mode as string | undefined;
+
   const successfullyEvaluatedRunIds = new Set(
     (benchmarks ?? [])
       .filter((b: Benchmark) => b.status === "completed" || b.status === "pending" || b.status === "running")
@@ -93,27 +159,24 @@ export function BenchmarkTab({ projectId }: { projectId: string }) {
   );
   const unevaluatedRuns = completedRuns.filter((r) => !successfullyEvaluatedRunIds.has(r.id));
 
-  // Resolve which runs are available for selection
   const availableRuns = hasAnyCompleted ? unevaluatedRuns : completedRuns;
   const effectiveSelectedId = selectedRunId ?? (availableRuns.length === 1 ? availableRuns[0].id : null);
   const selectedRun = availableRuns.find((r) => r.id === effectiveSelectedId);
 
-  // Find the run being evaluated (for pending state) — check both benchmark records and job status
   const pendingRunId = pendingBenchmarks[0]?.training_run_id;
   const pendingRun = completedRuns.find((r) => r.id === pendingRunId);
   const isEvaluating = pendingBenchmarks.length > 0 || jobIsActive;
 
-  // Find runs that failed evaluation (only failed, no successful benchmarks)
+  // Failed state: check both benchmark records and the job itself
   const failedRunIds = new Set(failedBenchmarks.map((b) => b.training_run_id));
   const failedOnlyRunIds = [...failedRunIds].filter((id) => !successfullyEvaluatedRunIds.has(id));
   const failedRunFromBenchmarks = failedOnlyRunIds.length > 0 ? completedRuns.find((r) => failedOnlyRunIds.includes(r.id)) : null;
+  const failedRun = failedRunFromBenchmarks ?? (jobFailed && !isEvaluating ? completedRuns[0] : null);
 
-  // Also check if the job itself failed (even without benchmark records)
-  const failedJobRunId = jobFailed && benchmarkJob?.progress_data
-    ? (benchmarkJob.progress_data as Record<string, unknown>)?.training_run_id as string | undefined
-    : undefined;
-  const failedRunFromJob = failedJobRunId ? completedRuns.find((r) => r.id === failedJobRunId) : null;
-  const failedRun = failedRunFromBenchmarks ?? failedRunFromJob ?? (jobFailed ? completedRuns[0] : null);
+  const handleEvaluateClick = () => {
+    if (!effectiveSelectedId) return;
+    setShowLaunchDialog(true);
+  };
 
   if (isLoading) {
     return <div className="h-32 animate-pulse bg-muted" />;
@@ -131,14 +194,19 @@ export function BenchmarkTab({ projectId }: { projectId: string }) {
               <p className="text-xs text-muted-foreground max-w-xs">
                 The evaluation for {formatRunLabel(failedRun)} did not complete. You can retry it below.
               </p>
+              {benchmarkJob?.error && (
+                <p className="text-xs text-destructive font-mono mt-1">{benchmarkJob.error}</p>
+              )}
             </div>
             <Button
-              onClick={() => evaluateMutation.mutate(failedRun.id)}
-              disabled={evaluateMutation.isPending}
+              onClick={() => {
+                setSelectedRunId(failedRun.id);
+                setShowLaunchDialog(true);
+              }}
               className="bg-ecole-orange text-white hover:bg-ecole-orange-light"
             >
               <RotateCcw className="mr-2 h-4 w-4" />
-              {evaluateMutation.isPending ? "Starting..." : "Retry Evaluation"}
+              Retry Evaluation
             </Button>
           </>
         ) : (
@@ -158,14 +226,27 @@ export function BenchmarkTab({ projectId }: { projectId: string }) {
                 selectedRunId={effectiveSelectedId}
                 selectedRun={selectedRun}
                 onSelect={setSelectedRunId}
-                onEvaluate={() => {
-                  if (effectiveSelectedId) evaluateMutation.mutate(effectiveSelectedId);
-                }}
+                onEvaluate={handleEvaluateClick}
                 isPending={evaluateMutation.isPending}
               />
             )}
           </>
         )}
+
+        <LaunchDialog
+          open={showLaunchDialog}
+          onOpenChange={setShowLaunchDialog}
+          computeMode={computeMode}
+          setComputeMode={setComputeMode}
+          hfFlavor={hfFlavor}
+          setHfFlavor={setHfFlavor}
+          hfNamespace={hfNamespace}
+          setHfNamespace={setHfNamespace}
+          hasHfToken={hasHfToken}
+          isPending={evaluateMutation.isPending}
+          onLaunch={() => evaluateMutation.mutate()}
+          navigate={navigate}
+        />
       </div>
     );
   }
@@ -192,10 +273,27 @@ export function BenchmarkTab({ projectId }: { projectId: string }) {
                   </span>
                 )}
               </div>
+              {jobComputeMode === "hf_jobs" && (
+                <Badge variant="outline" className="text-xs gap-1">
+                  <Cloud className="h-3 w-3" />
+                  HF Jobs
+                </Badge>
+              )}
             </div>
             <p className="text-xs text-muted-foreground mt-1.5 ml-5">
               Comparing base, fine-tuned, and teacher models on your eval set
             </p>
+            {hfJobUrl && (
+              <a
+                href={hfJobUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1.5 text-xs text-ecole-orange hover:underline font-mono mt-2 ml-5"
+              >
+                <Cloud className="h-3 w-3" />
+                View job on HuggingFace
+              </a>
+            )}
           </CardContent>
         </Card>
       )}
@@ -211,17 +309,22 @@ export function BenchmarkTab({ projectId }: { projectId: string }) {
                   <p className="text-xs text-muted-foreground mt-0.5">
                     {formatRunLabel(failedRun)}
                   </p>
+                  {benchmarkJob?.error && (
+                    <p className="text-xs text-destructive font-mono mt-1">{benchmarkJob.error}</p>
+                  )}
                 </div>
               </div>
               <Button
                 variant="outline"
                 size="sm"
-                onClick={() => evaluateMutation.mutate(failedRun.id)}
-                disabled={evaluateMutation.isPending}
+                onClick={() => {
+                  setSelectedRunId(failedRun.id);
+                  setShowLaunchDialog(true);
+                }}
                 className="font-mono text-xs"
               >
                 <RotateCcw className="mr-1.5 h-3.5 w-3.5" />
-                {evaluateMutation.isPending ? "Starting..." : "Retry"}
+                Retry
               </Button>
             </div>
           </CardContent>
@@ -370,15 +473,183 @@ export function BenchmarkTab({ projectId }: { projectId: string }) {
             selectedRunId={effectiveSelectedId}
             selectedRun={selectedRun}
             onSelect={setSelectedRunId}
-            onEvaluate={() => {
-              if (effectiveSelectedId) evaluateMutation.mutate(effectiveSelectedId);
-            }}
+            onEvaluate={handleEvaluateClick}
             isPending={evaluateMutation.isPending}
             compact
           />
         </div>
       )}
+
+      <LaunchDialog
+        open={showLaunchDialog}
+        onOpenChange={setShowLaunchDialog}
+        computeMode={computeMode}
+        setComputeMode={setComputeMode}
+        hfFlavor={hfFlavor}
+        setHfFlavor={setHfFlavor}
+        hfNamespace={hfNamespace}
+        setHfNamespace={setHfNamespace}
+        hasHfToken={hasHfToken}
+        isPending={evaluateMutation.isPending}
+        onLaunch={() => evaluateMutation.mutate()}
+        navigate={navigate}
+      />
     </div>
+  );
+}
+
+function LaunchDialog({
+  open,
+  onOpenChange,
+  computeMode,
+  setComputeMode,
+  hfFlavor,
+  setHfFlavor,
+  hfNamespace,
+  setHfNamespace,
+  hasHfToken,
+  isPending,
+  onLaunch,
+  navigate,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  computeMode: string;
+  setComputeMode: (v: string) => void;
+  hfFlavor: string;
+  setHfFlavor: (v: string) => void;
+  hfNamespace: string;
+  setHfNamespace: (v: string) => void;
+  hasHfToken: boolean;
+  isPending: boolean;
+  onLaunch: () => void;
+  navigate: (path: string) => void;
+}) {
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle className="font-mono">Evaluate Model</DialogTitle>
+          <DialogDescription>
+            Choose where to run the evaluation.
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="space-y-4">
+          {/* Compute Mode */}
+          <div>
+            <Label>Compute</Label>
+            <div className="grid grid-cols-2 gap-2 mt-1.5">
+              {COMPUTE_OPTIONS.map((opt) => (
+                <button
+                  key={opt.value}
+                  type="button"
+                  onClick={() => setComputeMode(opt.value)}
+                  className={`flex items-center gap-3 border p-3 text-left text-sm transition-colors ${
+                    computeMode === opt.value
+                      ? "border-ecole-orange bg-ecole-orange/5"
+                      : "border-input hover:border-muted-foreground"
+                  }`}
+                >
+                  <opt.icon className={`h-4 w-4 shrink-0 ${
+                    computeMode === opt.value ? "text-ecole-orange" : "text-muted-foreground"
+                  }`} />
+                  <div>
+                    <p className="font-medium font-mono text-xs">{opt.label}</p>
+                    <p className="text-xs text-muted-foreground">{opt.description}</p>
+                  </div>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* HF Jobs options */}
+          {computeMode === "hf_jobs" && (
+            <>
+              <div>
+                <Label className="flex items-center gap-1.5">
+                  <Cpu className="h-3.5 w-3.5" />
+                  Hardware
+                </Label>
+                <div className="grid grid-cols-1 gap-1.5 mt-1.5">
+                  {HF_FLAVOR_OPTIONS.map((opt) => {
+                    const isSelected = hfFlavor === opt.value;
+                    return (
+                      <button
+                        key={opt.value}
+                        type="button"
+                        onClick={() => setHfFlavor(opt.value)}
+                        className={`flex items-center justify-between border p-2.5 text-left text-sm transition-colors ${
+                          isSelected
+                            ? "border-ecole-orange bg-ecole-orange/5"
+                            : "border-input hover:border-muted-foreground"
+                        }`}
+                      >
+                        <span className="font-mono text-xs font-medium">{opt.label}</span>
+                        <div className="flex items-center gap-3 text-xs text-muted-foreground">
+                          <span>{opt.description}</span>
+                          <span className="font-mono">{opt.vram}</span>
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <div>
+                <Label>Organization Namespace</Label>
+                <Input
+                  value={hfNamespace}
+                  onChange={(e) => setHfNamespace(e.target.value)}
+                  placeholder="Leave empty for personal account"
+                />
+                <p className="text-xs text-muted-foreground mt-1">
+                  Org name to run the job under. Leave empty to use your personal account.
+                </p>
+              </div>
+            </>
+          )}
+
+          {computeMode === "hf_jobs" && !hasHfToken && (
+            <div className="flex items-start gap-2.5 border border-yellow-500/30 bg-yellow-500/5 p-3">
+              <AlertTriangle className="h-4 w-4 text-yellow-500 shrink-0 mt-0.5" />
+              <div className="text-xs">
+                <p className="font-medium text-yellow-600 dark:text-yellow-400">HuggingFace token required</p>
+                <p className="text-muted-foreground mt-0.5">
+                  Add your HF token in{" "}
+                  <button
+                    type="button"
+                    onClick={() => navigate("/settings")}
+                    className="text-ecole-orange hover:underline font-mono inline-flex items-center gap-0.5"
+                  >
+                    <Settings className="h-3 w-3" />
+                    Settings
+                  </button>
+                  {" "}before launching HF Jobs.
+                </p>
+              </div>
+            </div>
+          )}
+
+          <Button
+            onClick={onLaunch}
+            disabled={isPending || (computeMode === "hf_jobs" && !hasHfToken)}
+            className="w-full bg-ecole-orange text-white hover:bg-ecole-orange-light"
+          >
+            {computeMode === "hf_jobs" ? (
+              <Cloud className="mr-2 h-4 w-4" />
+            ) : (
+              <BarChart3 className="mr-2 h-4 w-4" />
+            )}
+            {isPending
+              ? "Launching..."
+              : computeMode === "hf_jobs"
+                ? "Evaluate on HF Jobs"
+                : "Evaluate Model"}
+          </Button>
+        </div>
+      </DialogContent>
+    </Dialog>
   );
 }
 

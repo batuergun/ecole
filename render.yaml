@@ -49,6 +49,9 @@ services:
     runtime: static
     buildCommand: cd web && corepack enable && pnpm install --frozen-lockfile && pnpm build
     staticPublishPath: ./web/dist
+    envVars:
+      - key: VITE_CLOUD_MODE
+        value: "true"
     headers:
       - path: /*
         name: X-Frame-Options

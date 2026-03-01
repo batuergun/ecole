@@ -20,7 +20,10 @@ func NewBenchmarkHandler(s *store.Store, q *queue.Queue) *BenchmarkHandler {
 }
 
 type triggerBenchmarkRequest struct {
-	TrainingRunID string `json:"training_run_id" binding:"required"`
+	TrainingRunID string  `json:"training_run_id" binding:"required"`
+	ComputeMode   string  `json:"compute_mode"`
+	HFFlavor      *string `json:"hf_flavor"`
+	HFNamespace   *string `json:"hf_namespace"`
 }
 
 func (h *BenchmarkHandler) Trigger(c *gin.Context) {
@@ -38,10 +41,21 @@ func (h *BenchmarkHandler) Trigger(c *gin.Context) {
 		return
 	}
 
-	payload, _ := json.Marshal(map[string]string{
+	p := map[string]interface{}{
 		"project_id":      projectID,
 		"training_run_id": req.TrainingRunID,
-	})
+	}
+	if req.ComputeMode != "" {
+		p["compute_mode"] = req.ComputeMode
+	}
+	if req.HFFlavor != nil {
+		p["hf_flavor"] = *req.HFFlavor
+	}
+	if req.HFNamespace != nil {
+		p["hf_namespace"] = *req.HFNamespace
+	}
+
+	payload, _ := json.Marshal(p)
 	job, err := h.queue.Enqueue(c.Request.Context(), "benchmark", projectID, payload)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to enqueue benchmark"})
