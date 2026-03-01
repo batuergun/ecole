@@ -2,7 +2,6 @@
 
 import json
 import os
-import re
 import time
 
 from worker.client import APIClient
@@ -140,20 +139,8 @@ def _run_local(
 
     _save_benchmark(client, base_benchmark["id"], base_results)
 
-    # --- 2. Per-epoch fine-tuned + final adapter evaluation ---
+    # --- 2. Final fine-tuned adapter evaluation ---
     if adapter_path:
-        _evaluate_per_epoch(
-            client=client,
-            llm=llm,
-            base_model=base_model,
-            adapter_path=adapter_path,
-            eval_items=eval_items,
-            job=job,
-            training_run_id=training_run_id,
-            project_id=project_id,
-        )
-
-        # Final adapter evaluation (epoch=null)
         if os.path.exists(adapter_path):
             print(f"[benchmark:local] Evaluating final fine-tuned model: {base_model} + {adapter_path}")
             ft_benchmark = client.create_benchmark(
@@ -435,61 +422,6 @@ def _score_raw_answers(
 
     return results
 
-
-def _evaluate_per_epoch(
-    client: APIClient,
-    llm: LLMClient,
-    base_model: str,
-    adapter_path: str,
-    eval_items: list[dict],
-    job: dict,
-    training_run_id: str,
-    project_id: str,
-) -> None:
-    """Discover per-epoch checkpoint dirs and evaluate each."""
-    # Checkpoints are in the parent directory of the final adapter
-    parent_dir = os.path.dirname(adapter_path)
-    if not os.path.isdir(parent_dir):
-        print(f"[benchmark] No parent dir for checkpoints: {parent_dir}")
-        return
-
-    # Find checkpoint-* directories, sorted by epoch number
-    checkpoint_dirs = []
-    for name in os.listdir(parent_dir):
-        match = re.match(r"checkpoint-(\d+)", name)
-        if match:
-            checkpoint_path = os.path.join(parent_dir, name)
-            if os.path.isdir(checkpoint_path):
-                checkpoint_dirs.append((int(match.group(1)), checkpoint_path))
-
-    checkpoint_dirs.sort(key=lambda x: x[0])
-
-    if not checkpoint_dirs:
-        print("[benchmark] No epoch checkpoints found, skipping per-epoch eval")
-        return
-
-    print(f"[benchmark] Found {len(checkpoint_dirs)} epoch checkpoints")
-
-    for epoch_idx, (step, ckpt_path) in enumerate(checkpoint_dirs, start=1):
-        print(f"[benchmark] Evaluating epoch {epoch_idx} checkpoint: {ckpt_path}")
-        epoch_benchmark = client.create_benchmark(
-            training_run_id=training_run_id,
-            project_id=project_id,
-            model_type="finetuned",
-            epoch=epoch_idx,
-        )
-
-        epoch_results = _evaluate_model(
-            llm=llm,
-            model_name=base_model,
-            adapter_path=ckpt_path,
-            eval_items=eval_items,
-            client=client,
-            job_id=job["id"],
-            label=f"finetuned-epoch-{epoch_idx}",
-        )
-
-        _save_benchmark(client, epoch_benchmark["id"], epoch_results)
 
 
 def _generate_batch(model, tokenizer, input_texts: list[str], max_new_tokens: int = 512) -> list[str]:
