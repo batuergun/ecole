@@ -500,33 +500,64 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
   <script>
+    /* Convert <img> srcs to data URIs so html2canvas can export the canvas */
+    async function inlineImages() {
+      var imgs = document.querySelectorAll('section img');
+      for (var i = 0; i < imgs.length; i++) {
+        var img = imgs[i];
+        if (img.src.startsWith('data:')) continue;
+        var res = await fetch(img.src);
+        var blob = await res.blob();
+        var uri = await new Promise(function(r) {
+          var fr = new FileReader();
+          fr.onload = function() { r(fr.result); };
+          fr.readAsDataURL(blob);
+        });
+        img.src = uri;
+        await new Promise(function(r) { img.onload = r; });
+      }
+    }
+
     async function downloadPDF() {
       var btn = document.getElementById('pdf-btn');
+
+      if (location.protocol === 'file:') {
+        alert('Images can\u2019t be exported from file://.\n\nRun this in the assets/ folder:\n\n  python3 -m http.server\n\nThen open http://localhost:8000/pitch.html');
+        return;
+      }
+
       btn.textContent = 'Generating...';
       btn.disabled = true;
 
-      var slides = document.querySelectorAll('section');
-      var W = 3840, H = 2160;
-      var pdf = new jspdf.jsPDF({
-        orientation: 'landscape',
-        unit: 'px',
-        format: [W, H],
-        hotfixes: ['px_scaling']
-      });
+      try {
+        await inlineImages();
 
-      for (var i = 0; i < slides.length; i++) {
-        if (i > 0) pdf.addPage([W, H], 'landscape');
-        var canvas = await html2canvas(slides[i], {
-          width: W,
-          height: H,
-          scale: 1,
-          useCORS: true,
-          logging: false
+        var slides = document.querySelectorAll('section');
+        var W = 3840, H = 2160;
+        var pdf = new jspdf.jsPDF({
+          orientation: 'landscape',
+          unit: 'px',
+          format: [W, H],
+          hotfixes: ['px_scaling']
         });
-        pdf.addImage(canvas.toDataURL('image/jpeg', 0.85), 'JPEG', 0, 0, W, H);
-      }
 
-      pdf.save('ecole-pitch.pdf');
+        for (var i = 0; i < slides.length; i++) {
+          if (i > 0) pdf.addPage([W, H], 'landscape');
+          var canvas = await html2canvas(slides[i], {
+            width: W,
+            height: H,
+            scale: 0.5,
+            logging: false
+          });
+          pdf.addImage(canvas.toDataURL('image/jpeg', 0.8), 'JPEG', 0, 0, W, H);
+          canvas.width = 0;
+          canvas.height = 0;
+        }
+
+        pdf.save('ecole-pitch.pdf');
+      } catch (e) {
+        alert('PDF generation failed: ' + e.message);
+      }
       btn.textContent = 'Download PDF';
       btn.disabled = false;
     }
