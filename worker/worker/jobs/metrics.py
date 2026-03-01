@@ -20,7 +20,6 @@ def semantic_similarity(text_a: str, text_b: str) -> float:
     model = _get_st_model()
     embeddings = model.encode([text_a, text_b], normalize_embeddings=True)
     score = float(embeddings[0] @ embeddings[1])
-    # Clamp to [0, 1]
     return max(0.0, min(1.0, score))
 
 
@@ -34,7 +33,10 @@ def rouge_l_score(prediction: str, reference: str) -> float:
 
 
 def compute_metrics(answer: str, expected: str) -> dict[str, float | None]:
-    """Compute all deterministic metrics, returning None for any that fail."""
+    """Compute all deterministic metrics for a single answer/expected pair.
+
+    Returns None for any metric that fails so the benchmark can continue.
+    """
     result: dict[str, float | None] = {
         "semantic_similarity": None,
         "rouge_l": None,

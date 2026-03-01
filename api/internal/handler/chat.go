@@ -91,6 +91,21 @@ func (h *ChatHandler) CreateSession(c *gin.Context) {
 	c.JSON(http.StatusCreated, session)
 }
 
+func (h *ChatHandler) ListAllSessions(c *gin.Context) {
+	userID := middleware.GetUserID(c)
+
+	sessions, err := h.store.ListAllUserChatSessions(c.Request.Context(), userID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to list sessions"})
+		return
+	}
+	if sessions == nil {
+		c.JSON(http.StatusOK, []any{})
+		return
+	}
+	c.JSON(http.StatusOK, sessions)
+}
+
 func (h *ChatHandler) ListSessions(c *gin.Context) {
 	userID := middleware.GetUserID(c)
 	projectID := c.Param("id")

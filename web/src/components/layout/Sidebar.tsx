@@ -1,7 +1,7 @@
 import { Link, useLocation } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { api, type Project } from "@/lib/api";
-import { Settings, Plus, LogOut, Activity } from "lucide-react";
+import { Settings, Plus, LogOut, Activity, MessageSquare } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { Button } from "@/components/ui/button";
 
@@ -127,6 +127,17 @@ export function Sidebar() {
 
       {/* Bottom */}
       <div className="border-t border-border">
+        <Link
+          to="/chats"
+          className={`flex items-center gap-3 mx-2 px-3 py-2.5 text-sm font-medium transition-colors ${
+            location.pathname === "/chats"
+              ? "bg-secondary text-foreground"
+              : "text-muted-foreground hover:bg-secondary hover:text-foreground"
+          }`}
+        >
+          <MessageSquare className="h-4 w-4" />
+          Chats
+        </Link>
         <Link
           to="/jobs"
           className={`flex items-center gap-3 mx-2 px-3 py-2.5 text-sm font-medium transition-colors ${

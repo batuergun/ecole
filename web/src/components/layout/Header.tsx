@@ -6,6 +6,7 @@ import { Sun, Moon } from "lucide-react";
 const titleMap: Record<string, string> = {
   "/": "",
   "/projects/new": "New Model",
+  "/chats": "Chats",
   "/jobs": "Jobs",
   "/settings": "Settings",
 };

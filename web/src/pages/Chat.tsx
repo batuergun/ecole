@@ -254,7 +254,7 @@ export default function Chat() {
                   <SelectContent>
                     {completedRuns.map((run: TrainingRun) => (
                       <SelectItem key={run.id} value={run.id}>
-                        {run.base_model.split("/").pop()}
+                        Fine-tuned · {run.base_model.split("/").pop()}
                         {run.train_loss != null &&
                           ` — Loss: ${run.train_loss.toFixed(4)}`}
                       </SelectItem>
@@ -310,24 +310,32 @@ export default function Chat() {
               Previous Sessions
             </h3>
             <div className="space-y-2">
-              {sessions.map((s: ChatSession) => (
-                <Link
-                  key={s.id}
-                  to={`/projects/${projectId}/chat/${s.id}`}
-                  className="flex items-center justify-between border border-border p-3 hover:bg-muted/50 transition-colors"
-                >
-                  <div className="flex items-center gap-3">
-                    <MessageSquare className="h-4 w-4 text-muted-foreground" />
-                    <span className="text-sm font-mono">
-                      {s.inference_mode === "hf_endpoint" ? "HF" : "Local"}
-                    </span>
-                    <span className="text-xs text-muted-foreground">
-                      {new Date(s.created_at).toLocaleString()}
-                    </span>
-                  </div>
-                  {statusBadge(s.status)}
-                </Link>
-              ))}
+              {sessions.map((s: ChatSession) => {
+                const sessionRun = completedRuns?.find(
+                  (r: TrainingRun) => r.id === s.training_run_id
+                );
+                return (
+                  <Link
+                    key={s.id}
+                    to={`/projects/${projectId}/chat/${s.id}`}
+                    className="flex items-center justify-between border border-border p-3 hover:bg-muted/50 transition-colors"
+                  >
+                    <div className="flex items-center gap-3">
+                      <MessageSquare className="h-4 w-4 text-muted-foreground" />
+                      <span className="text-sm font-mono">
+                        Fine-tuned{sessionRun ? ` · ${sessionRun.base_model.split("/").pop()}` : ""}
+                      </span>
+                      <span className="text-xs text-muted-foreground">
+                        {s.inference_mode === "hf_endpoint" ? "HF" : "Local"}
+                      </span>
+                      <span className="text-xs text-muted-foreground">
+                        {new Date(s.created_at).toLocaleString()}
+                      </span>
+                    </div>
+                    {statusBadge(s.status)}
+                  </Link>
+                );
+              })}
             </div>
           </div>
         )}
@@ -358,7 +366,7 @@ export default function Chat() {
           <p className="text-sm font-mono">
             {session.inference_mode === "hf_endpoint"
               ? "Deploying HF Inference Endpoint..."
-              : "Loading model on worker..."}
+              : "Loading fine-tuned model..."}
           </p>
           <p className="text-xs text-muted-foreground mt-2">
             This may take a few minutes
@@ -420,7 +428,10 @@ export default function Chat() {
           >
             <ArrowLeft className="h-4 w-4" />
           </Link>
-          <h2 className="text-lg font-mono font-bold">Demo Chat</h2>
+          <div>
+            <h2 className="text-lg font-mono font-bold">Demo Chat</h2>
+            <p className="text-xs text-muted-foreground font-mono">Fine-tuned Model</p>
+          </div>
           {session && statusBadge(session.status)}
           {session?.inference_mode === "hf_endpoint" && (
             <span className="text-xs text-muted-foreground font-mono">

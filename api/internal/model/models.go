@@ -159,3 +159,9 @@ type ChatMessage struct {
 	Status    string    `json:"status" db:"status"`
 	CreatedAt time.Time `json:"created_at" db:"created_at"`
 }
+
+type ChatSessionWithDetails struct {
+	ChatSession
+	ProjectName string `json:"project_name"`
+	BaseModel   string `json:"base_model"`
+}

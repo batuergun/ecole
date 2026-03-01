@@ -47,6 +47,9 @@ func New(cfg *config.Config, s *store.Store, st *storage.Storage, q *queue.Queue
 		// Activity (all jobs across projects)
 		api.GET("/activity", activityH.List)
 
+		// All chat sessions across projects
+		api.GET("/chats", chatH.ListAllSessions)
+
 		// Settings
 		api.GET("/settings/keys", settingsH.GetKeys)
 		api.PUT("/settings/keys", settingsH.UpdateKeys)

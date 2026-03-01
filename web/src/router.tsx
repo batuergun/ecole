@@ -7,6 +7,7 @@ import ProjectDetail from "@/pages/ProjectDetail";
 import Settings from "@/pages/Settings";
 import Jobs from "@/pages/Jobs";
 import Chat from "@/pages/Chat";
+import Chats from "@/pages/Chats";
 import Login from "@/pages/Login";
 
 export const router = createBrowserRouter([
@@ -27,6 +28,7 @@ export const router = createBrowserRouter([
       { path: "projects/:id", element: <ProjectDetail /> },
       { path: "projects/:id/chat", element: <Chat /> },
       { path: "projects/:id/chat/:sessionId", element: <Chat /> },
+      { path: "chats", element: <Chats /> },
       { path: "jobs", element: <Jobs /> },
       { path: "settings", element: <Settings /> },
     ],

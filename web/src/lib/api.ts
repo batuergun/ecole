@@ -119,6 +119,10 @@ export const api = {
   updateKeys: (data: { anthropic_key?: string; mistral_key?: string; hf_token?: string }) =>
     request("/settings/keys", { method: "PUT", body: JSON.stringify(data) }),
 
+  // Chat (global)
+  listAllChatSessions: () =>
+    request<ChatSessionWithDetails[]>("/chats"),
+
   // Chat
   createChatSession: (projectId: string, data: { training_run_id: string; inference_mode: string }) =>
     request<ChatSession>(`/projects/${projectId}/chat`, {
@@ -330,6 +334,11 @@ export interface ChatMessage {
   content: string;
   status: string;
   created_at: string;
+}
+
+export interface ChatSessionWithDetails extends ChatSession {
+  project_name: string;
+  base_model: string;
 }
 
 export interface ChatStreamEvent {

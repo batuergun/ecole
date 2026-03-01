@@ -1,4 +1,4 @@
-"""Auto-benchmark: evaluate base, per-epoch fine-tuned, teacher, and final fine-tuned models."""
+"""Auto-benchmark: evaluate base and fine-tuned models."""
 
 import json
 import os
@@ -177,17 +177,6 @@ def _run_local(
             print(f"[benchmark:local] Skipping fine-tuned eval (no adapter at {adapter_path})")
     else:
         print("[benchmark:local] Skipping fine-tuned eval (no adapter path)")
-
-    # --- 3. Teacher model evaluation ---
-    print(f"[benchmark:local] Evaluating teacher model ({provider})")
-    _evaluate_teacher(
-        client=client,
-        llm=llm,
-        eval_items=eval_items,
-        job=job,
-        training_run_id=training_run_id,
-        project_id=project_id,
-    )
 
     # Update project status
     client.update_project_status(project_id, "benchmarked")
@@ -400,18 +389,6 @@ def _run_hf_jobs(
         ft_results = _score_raw_answers(llm, ft_raw, client, job["id"], "finetuned", progress_extra=hf_progress)
         _save_benchmark(client, ft_benchmark["id"], ft_results)
 
-    # --- Teacher model evaluation (API-based, runs locally) ---
-    print(f"[benchmark:hf_jobs] Evaluating teacher model ({provider})")
-    _evaluate_teacher(
-        client=client,
-        llm=llm,
-        eval_items=eval_items,
-        job=job,
-        training_run_id=training_run_id,
-        project_id=project_id,
-        progress_extra=hf_progress,
-    )
-
     # Update project status
     client.update_project_status(project_id, "benchmarked")
     print(f"[benchmark:hf_jobs] Done for {training_run_id}")
@@ -425,7 +402,7 @@ def _score_raw_answers(
     label: str,
     progress_extra: dict | None = None,
 ) -> list[dict]:
-    """Score raw {question, expected, answer} entries with LLM judge + deterministic metrics."""
+    """Score raw {question, expected, answer} entries with LLM judge."""
     extra = progress_extra or {}
     results = []
     for i, entry in enumerate(raw_entries):
@@ -515,64 +492,6 @@ def _evaluate_per_epoch(
         _save_benchmark(client, epoch_benchmark["id"], epoch_results)
 
 
-def _evaluate_teacher(
-    client: APIClient,
-    llm: LLMClient,
-    eval_items: list[dict],
-    job: dict,
-    training_run_id: str,
-    project_id: str,
-    progress_extra: dict | None = None,
-) -> None:
-    """Evaluate the teacher LLM (Claude/Mistral) on the eval set."""
-    extra = progress_extra or {}
-    teacher_benchmark = client.create_benchmark(
-        training_run_id=training_run_id,
-        project_id=project_id,
-        model_type="teacher",
-    )
-
-    results = []
-    for i, item in enumerate(eval_items):
-        question = item["question"]
-        expected = item["answer"]
-
-        # Generate answer from teacher LLM
-        try:
-            answer = llm.answer_question(question)
-        except Exception as e:
-            print(f"[benchmark] Teacher answer error: {e}")
-            answer = f"Error: {e}"
-
-        # Score with LLM judge
-        score_data = _judge_answer(llm, question, expected, answer)
-
-        # Compute deterministic metrics
-        metrics = compute_metrics(answer, expected)
-
-        results.append({
-            "question": question,
-            "expected": expected,
-            "answer": answer,
-            "score": score_data.get("score", 0),
-            "reason": score_data.get("reason", ""),
-            "semantic_similarity": metrics["semantic_similarity"],
-            "rouge_l": metrics["rouge_l"],
-        })
-
-        if (i + 1) % 5 == 0 or i == len(eval_items) - 1:
-            client.report_progress(job["id"], {
-                "status": "running",
-                "label": "teacher",
-                "evaluated": i + 1,
-                "total": len(eval_items),
-                **extra,
-            })
-            print(f"[benchmark] teacher: {i + 1}/{len(eval_items)}")
-
-    _save_benchmark(client, teacher_benchmark["id"], results)
-
-
 def _generate_batch(model, tokenizer, input_texts: list[str], max_new_tokens: int = 512) -> list[str]:
     """Generate answers for a batch of inputs."""
     import torch
@@ -655,7 +574,7 @@ def _evaluate_model(
         all_answers.extend(batch_answers)
         print(f"[benchmark] {label} inference: {end}/{total}")
 
-    # Score answers with LLM judge
+    # Score answers with LLM judge + deterministic metrics
     results = []
     for i, item in enumerate(eval_items):
         score_data = _judge_answer(llm, item["question"], item["answer"], all_answers[i])
@@ -740,11 +659,10 @@ def _save_benchmark(client: APIClient, benchmark_id: str, results: list[dict]) -
     accurate = sum(1 for s in scores if s >= 4)
     accuracy = accurate / total if total > 0 else 0.0
 
-    # Aggregate deterministic metrics
+    # Aggregate deterministic metrics (skip None values from failed computations)
     sim_scores = [r["semantic_similarity"] for r in results if r.get("semantic_similarity") is not None]
     rouge_scores = [r["rouge_l"] for r in results if r.get("rouge_l") is not None]
-
-    avg_semantic_similarity = sum(sim_scores) / len(sim_scores) if sim_scores else None
+    avg_similarity = sum(sim_scores) / len(sim_scores) if sim_scores else None
     avg_rouge_l = sum(rouge_scores) / len(rouge_scores) if rouge_scores else None
 
     client.complete_benchmark(
@@ -753,10 +671,11 @@ def _save_benchmark(client: APIClient, benchmark_id: str, results: list[dict]) -
         avg_score=avg_score,
         total_questions=total,
         results=results,
-        semantic_similarity=avg_semantic_similarity,
+        semantic_similarity=avg_similarity,
         rouge_l=avg_rouge_l,
     )
 
-    sim_str = f"{avg_semantic_similarity:.3f}" if avg_semantic_similarity is not None else "n/a"
+    sim_str = f"{avg_similarity:.3f}" if avg_similarity is not None else "n/a"
     rouge_str = f"{avg_rouge_l:.3f}" if avg_rouge_l is not None else "n/a"
-    print(f"[benchmark] Saved: avg_score={avg_score:.2f}, accuracy={accuracy:.2%}, sem_sim={sim_str}, rouge_l={rouge_str}, n={total}")
+    print(f"[benchmark] Saved: avg_score={avg_score:.2f}, accuracy={accuracy:.2%}, "
+          f"sem_sim={sim_str}, rouge_l={rouge_str}, n={total}")

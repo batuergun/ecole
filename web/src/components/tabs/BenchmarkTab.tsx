@@ -30,6 +30,8 @@ import {
   Monitor,
   Cpu,
   Settings,
+  ChevronLeft,
+  ChevronRight,
 } from "lucide-react";
 
 interface BenchmarkResult {
@@ -43,6 +45,7 @@ interface BenchmarkResult {
 }
 
 const IS_CLOUD = import.meta.env.VITE_CLOUD_MODE === "true";
+const RESULTS_PAGE_SIZE = 10;
 
 const ALL_COMPUTE_OPTIONS = [
   { value: "local", label: "Local GPU", icon: Monitor, description: "Run on your own GPU" },
@@ -82,6 +85,8 @@ export function BenchmarkTab({ projectId }: { projectId: string }) {
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [selectedRunId, setSelectedRunId] = useState<string | null>(null);
   const [showLaunchDialog, setShowLaunchDialog] = useState(false);
+  const [resultPages, setResultPages] = useState<Record<string, number>>({});
+  const [detailResult, setDetailResult] = useState<BenchmarkResult | null>(null);
 
   // Launch modal state
   const [computeMode, setComputeMode] = useState(IS_CLOUD ? "hf_jobs" : "local");
@@ -256,7 +261,6 @@ export function BenchmarkTab({ projectId }: { projectId: string }) {
 
   const baseBenchmark = benchmarks?.find((b: Benchmark) => b.model_type === "base" && b.status === "completed");
   const ftBenchmark = benchmarks?.find((b: Benchmark) => b.model_type === "finetuned" && b.epoch == null && b.status === "completed");
-  const teacherBenchmark = benchmarks?.find((b: Benchmark) => b.model_type === "teacher" && b.status === "completed");
   const epochBenchmarks = (benchmarks ?? [])
     .filter((b: Benchmark) => b.model_type === "finetuned" && b.epoch != null && b.status === "completed")
     .sort((a, b) => (a.epoch ?? 0) - (b.epoch ?? 0));
@@ -284,7 +288,7 @@ export function BenchmarkTab({ projectId }: { projectId: string }) {
               )}
             </div>
             <p className="text-xs text-muted-foreground mt-1.5 ml-5">
-              Comparing base, fine-tuned, and teacher models on your eval set
+              Comparing base and fine-tuned models on your eval set
             </p>
             {hfJobUrl && (
               <a
@@ -336,7 +340,7 @@ export function BenchmarkTab({ projectId }: { projectId: string }) {
 
       {hasAnyCompleted && (
         <>
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
             <ScoreCard
               title="Base Model"
               benchmark={baseBenchmark}
@@ -351,11 +355,6 @@ export function BenchmarkTab({ projectId }: { projectId: string }) {
                   ? ((ftBenchmark.avg_score - baseBenchmark.avg_score) / baseBenchmark.avg_score) * 100
                   : undefined
               }
-            />
-            <ScoreCard
-              title="Teacher Model"
-              benchmark={teacherBenchmark}
-              isHighlighted={false}
             />
           </div>
 
@@ -388,10 +387,10 @@ export function BenchmarkTab({ projectId }: { projectId: string }) {
                             {b.accuracy != null ? `${(b.accuracy * 100).toFixed(1)}%` : "—"}
                           </td>
                           <td className="py-2 pr-4 font-mono">
-                            {b.semantic_similarity != null ? b.semantic_similarity.toFixed(3) : "—"}
+                            {b.semantic_similarity != null ? `${(b.semantic_similarity * 100).toFixed(1)}%` : "—"}
                           </td>
                           <td className="py-2 font-mono">
-                            {b.rouge_l != null ? b.rouge_l.toFixed(3) : "—"}
+                            {b.rouge_l != null ? `${(b.rouge_l * 100).toFixed(1)}%` : "—"}
                           </td>
                         </tr>
                       ))}
@@ -404,66 +403,117 @@ export function BenchmarkTab({ projectId }: { projectId: string }) {
 
           {/* Per-question results */}
           {(benchmarks ?? [])
-            .filter((b: Benchmark) => b.status === "completed" && b.results)
-            .map((b: Benchmark) => (
-              <div key={b.id}>
-                <button
-                  onClick={() => setExpandedId(expandedId === b.id ? null : b.id)}
-                  className="w-full text-left"
-                >
-                  <h3 className="text-sm font-mono tracking-wide text-muted-foreground mb-2 hover:text-foreground transition-colors">
-                    {modelTypeLabel(b)} — Per-Question Results
-                    {b.epoch != null && ` (Epoch ${b.epoch})`}
-                    <span className="ml-2 text-xs">
-                      {expandedId === b.id ? "[-]" : "[+]"}
-                    </span>
-                  </h3>
-                </button>
-                {expandedId === b.id && (
-                  <div className="space-y-2">
-                    {(b.results as unknown as BenchmarkResult[])?.map((r, i) => (
-                      <Card key={i} className="p-3">
-                        <div className="flex items-start justify-between gap-4">
-                          <div className="flex-1 min-w-0 space-y-1">
-                            <p className="text-sm font-medium">{r.question}</p>
-                            <p className="text-xs text-muted-foreground truncate">
-                              Model: {r.answer?.slice(0, 120)}...
-                            </p>
+            .filter((b: Benchmark) => b.status === "completed" && b.results && b.model_type !== "teacher")
+            .map((b: Benchmark) => {
+              const allResults = (b.results as unknown as BenchmarkResult[]) ?? [];
+              const page = resultPages[b.id] ?? 0;
+              const totalPages = Math.ceil(allResults.length / RESULTS_PAGE_SIZE);
+              const pagedResults = allResults.slice(
+                page * RESULTS_PAGE_SIZE,
+                (page + 1) * RESULTS_PAGE_SIZE
+              );
+
+              return (
+                <div key={b.id}>
+                  <button
+                    onClick={() => setExpandedId(expandedId === b.id ? null : b.id)}
+                    className="w-full text-left"
+                  >
+                    <h3 className="text-sm font-mono tracking-wide text-muted-foreground mb-2 hover:text-foreground transition-colors">
+                      {modelTypeLabel(b)} — Per-Question Results
+                      {b.epoch != null && ` (Epoch ${b.epoch})`}
+                      <span className="ml-2 text-xs">
+                        {expandedId === b.id ? "[-]" : "[+]"}
+                      </span>
+                    </h3>
+                  </button>
+                  {expandedId === b.id && (
+                    <div className="space-y-2">
+                      {pagedResults.map((r, i) => (
+                        <Card
+                          key={page * RESULTS_PAGE_SIZE + i}
+                          className="p-3 cursor-pointer hover:bg-muted/50 transition-colors"
+                          onClick={() => setDetailResult(r)}
+                        >
+                          <div className="flex items-start justify-between gap-4">
+                            <div className="flex-1 min-w-0 space-y-1">
+                              <p className="text-sm font-medium">{r.question}</p>
+                              <p className="text-xs text-muted-foreground truncate">
+                                Model: {r.answer?.slice(0, 120)}
+                                {r.answer?.length > 120 && "..."}
+                              </p>
+                            </div>
+                            <div className="flex items-center gap-2 shrink-0">
+                              {r.semantic_similarity != null && (
+                                <Badge variant="secondary" className="text-xs font-mono">
+                                  Sim {(r.semantic_similarity * 100).toFixed(0)}%
+                                </Badge>
+                              )}
+                              {r.rouge_l != null && (
+                                <Badge variant="secondary" className="text-xs font-mono">
+                                  RL {(r.rouge_l * 100).toFixed(0)}%
+                                </Badge>
+                              )}
+                              <Badge
+                                variant="outline"
+                                className={
+                                  r.score >= 4
+                                    ? "border-ecole-orange text-ecole-orange"
+                                    : r.score >= 3
+                                      ? "border-yellow-500 text-yellow-600"
+                                      : "border-destructive text-destructive"
+                                }
+                              >
+                                {r.score}/5
+                              </Badge>
+                            </div>
                           </div>
-                          <div className="flex items-center gap-2 shrink-0">
-                            <Badge
-                              variant="outline"
-                              className={
-                                r.score >= 4
-                                  ? "border-ecole-orange text-ecole-orange"
-                                  : r.score >= 3
-                                    ? "border-yellow-500 text-yellow-600"
-                                    : "border-destructive text-destructive"
+                          {r.reason && (
+                            <p className="text-xs text-muted-foreground mt-1 italic">{r.reason}</p>
+                          )}
+                        </Card>
+                      ))}
+
+                      {/* Pagination */}
+                      {totalPages > 1 && (
+                        <div className="flex items-center justify-between px-1 py-2">
+                          <span className="text-xs text-muted-foreground font-mono">
+                            {page * RESULTS_PAGE_SIZE + 1}-
+                            {Math.min((page + 1) * RESULTS_PAGE_SIZE, allResults.length)} of{" "}
+                            {allResults.length}
+                          </span>
+                          <div className="flex items-center gap-1">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              disabled={page === 0}
+                              onClick={() =>
+                                setResultPages((prev) => ({ ...prev, [b.id]: page - 1 }))
                               }
                             >
-                              {r.score}/5
-                            </Badge>
-                            {r.semantic_similarity != null && (
-                              <Badge variant="outline" className="text-xs">
-                                Sim {r.semantic_similarity.toFixed(2)}
-                              </Badge>
-                            )}
-                            {r.rouge_l != null && (
-                              <Badge variant="outline" className="text-xs">
-                                RL {r.rouge_l.toFixed(2)}
-                              </Badge>
-                            )}
+                              <ChevronLeft className="h-4 w-4" />
+                            </Button>
+                            <span className="text-xs font-mono px-2">
+                              {page + 1} / {totalPages}
+                            </span>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              disabled={page >= totalPages - 1}
+                              onClick={() =>
+                                setResultPages((prev) => ({ ...prev, [b.id]: page + 1 }))
+                              }
+                            >
+                              <ChevronRight className="h-4 w-4" />
+                            </Button>
                           </div>
                         </div>
-                        {r.reason && (
-                          <p className="text-xs text-muted-foreground mt-1 italic">{r.reason}</p>
-                        )}
-                      </Card>
-                    ))}
-                  </div>
-                )}
-              </div>
-            ))}
+                      )}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
         </>
       )}
 
@@ -497,6 +547,57 @@ export function BenchmarkTab({ projectId }: { projectId: string }) {
         onLaunch={() => evaluateMutation.mutate()}
         navigate={navigate}
       />
+
+      {/* Result detail dialog */}
+      <Dialog open={detailResult !== null} onOpenChange={(open) => !open && setDetailResult(null)}>
+        <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="font-mono text-sm">Result Detail</DialogTitle>
+            <DialogDescription>
+              Full question and answer comparison
+            </DialogDescription>
+          </DialogHeader>
+          {detailResult && (
+            <div className="space-y-4">
+              <div>
+                <p className="text-xs font-mono text-muted-foreground mb-1">Question</p>
+                <p className="text-sm whitespace-pre-wrap">{detailResult.question}</p>
+              </div>
+              <div>
+                <p className="text-xs font-mono text-muted-foreground mb-1">Expected Answer</p>
+                <p className="text-sm whitespace-pre-wrap">{detailResult.expected}</p>
+              </div>
+              <div>
+                <p className="text-xs font-mono text-muted-foreground mb-1">Model Answer</p>
+                <p className="text-sm whitespace-pre-wrap">{detailResult.answer}</p>
+              </div>
+              <div className="flex items-center gap-4">
+                <div>
+                  <p className="text-xs font-mono text-muted-foreground mb-1">Score</p>
+                  <Badge
+                    variant="outline"
+                    className={
+                      detailResult.score >= 4
+                        ? "border-ecole-orange text-ecole-orange"
+                        : detailResult.score >= 3
+                          ? "border-yellow-500 text-yellow-600"
+                          : "border-destructive text-destructive"
+                    }
+                  >
+                    {detailResult.score}/5
+                  </Badge>
+                </div>
+                {detailResult.reason && (
+                  <div className="flex-1">
+                    <p className="text-xs font-mono text-muted-foreground mb-1">Reason</p>
+                    <p className="text-sm italic">{detailResult.reason}</p>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
@@ -724,7 +825,6 @@ function RunSelector({
 
 function modelTypeLabel(b: Benchmark): string {
   if (b.model_type === "base") return "Base";
-  if (b.model_type === "teacher") return "Teacher";
   return "Fine-tuned";
 }
 
@@ -765,15 +865,19 @@ function ScoreCard({
               </span>
             </div>
             <div className="flex items-center justify-between">
-              <span className="text-sm">Semantic Sim.</span>
+              <span className="text-sm">Semantic Similarity</span>
               <span className="font-mono">
-                {benchmark.semantic_similarity != null ? benchmark.semantic_similarity.toFixed(3) : "—"}
+                {benchmark.semantic_similarity != null
+                  ? `${(benchmark.semantic_similarity * 100).toFixed(1)}%`
+                  : "—"}
               </span>
             </div>
             <div className="flex items-center justify-between">
               <span className="text-sm">ROUGE-L</span>
               <span className="font-mono">
-                {benchmark.rouge_l != null ? benchmark.rouge_l.toFixed(3) : "—"}
+                {benchmark.rouge_l != null
+                  ? `${(benchmark.rouge_l * 100).toFixed(1)}%`
+                  : "—"}
               </span>
             </div>
             <div className="flex items-center justify-between">

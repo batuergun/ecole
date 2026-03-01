@@ -82,6 +82,37 @@ func (s *Store) ListChatSessions(ctx context.Context, projectID string) ([]model
 	return sessions, nil
 }
 
+func (s *Store) ListAllUserChatSessions(ctx context.Context, userID string) ([]model.ChatSessionWithDetails, error) {
+	rows, err := s.pool.Query(ctx, `
+		SELECT cs.id, cs.project_id, cs.training_run_id, cs.inference_mode, cs.hf_endpoint_name, cs.hf_endpoint_url,
+			cs.hf_endpoint_status, cs.job_id, cs.status, cs.error_message, cs.created_at, cs.updated_at,
+			p.name, COALESCE(tr.base_model, '')
+		FROM chat_sessions cs
+		JOIN projects p ON p.id = cs.project_id
+		LEFT JOIN training_runs tr ON tr.id = cs.training_run_id
+		WHERE p.user_id = $1
+		ORDER BY cs.created_at DESC
+	`, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var sessions []model.ChatSessionWithDetails
+	for rows.Next() {
+		var s model.ChatSessionWithDetails
+		if err := rows.Scan(
+			&s.ID, &s.ProjectID, &s.TrainingRunID, &s.InferenceMode, &s.HFEndpointName, &s.HFEndpointURL,
+			&s.HFEndpointStatus, &s.JobID, &s.Status, &s.ErrorMessage, &s.CreatedAt, &s.UpdatedAt,
+			&s.ProjectName, &s.BaseModel,
+		); err != nil {
+			return nil, err
+		}
+		sessions = append(sessions, s)
+	}
+	return sessions, nil
+}
+
 func (s *Store) UpdateChatSessionStatus(ctx context.Context, id, status string) error {
 	_, err := s.pool.Exec(ctx, `
 		UPDATE chat_sessions SET status = $2, updated_at = NOW() WHERE id = $1
