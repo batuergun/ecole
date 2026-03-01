@@ -28,7 +28,9 @@ QA_GENERATION_PROMPT = """Generate {n} diverse question-answer pairs from the fo
 
 ## Requirements
 - Questions should be natural and varied: factual recall, inferential reasoning, application-based, and comparative
-- Answers should be comprehensive but concise
+- Each answer MUST begin with a step-by-step reasoning trace wrapped in <think>...</think> tags, followed by the final answer
+- The reasoning trace should show the thought process: what the question asks, relevant facts from the source, and how they connect
+- After the </think> tag, provide the comprehensive but concise final answer
 - Each Q&A pair must be self-contained (understandable without seeing the source)
 - Vary question complexity from simple to advanced
 {format_instructions}
@@ -36,7 +38,7 @@ QA_GENERATION_PROMPT = """Generate {n} diverse question-answer pairs from the fo
 ## Output Format
 Return a JSON array only, no other text:
 [
-  {{"question": "...", "answer": "..."}},
+  {{"question": "...", "answer": "<think>\\nStep-by-step reasoning here...\\n</think>\\nFinal answer here."}},
   ...
 ]"""
 
@@ -414,7 +416,7 @@ def _call_llm(llm: LLMClient, content_blocks: list[dict], use_vision: bool = Fal
         response = llm.generate(
             system=SYSTEM_PROMPT,
             content_blocks=content_blocks,
-            max_tokens=4096,
+            max_tokens=8192,
             use_vision=use_vision,
         )
 

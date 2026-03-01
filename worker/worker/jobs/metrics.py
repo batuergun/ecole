@@ -2,7 +2,18 @@
 
 from __future__ import annotations
 
+import re
+
 _st_model = None
+
+
+def strip_think_tags(text: str) -> str:
+    """Strip <think>...</think> blocks and incomplete trailing <think> blocks from text."""
+    # Remove complete <think>...</think> blocks (including across newlines)
+    text = re.sub(r"<think>[\s\S]*?</think>", "", text)
+    # Remove incomplete trailing <think> block (opened but never closed)
+    text = re.sub(r"<think>[\s\S]*$", "", text)
+    return text.strip()
 
 
 def _get_st_model():

@@ -18,6 +18,7 @@ to score locally.
 """
 
 import os
+import re
 import sys
 
 import torch
@@ -25,6 +26,13 @@ from datasets import Dataset, load_dataset
 from huggingface_hub import HfApi
 from peft import PeftModel
 from transformers import AutoConfig, AutoModelForCausalLM, AutoTokenizer
+
+
+def strip_think_tags(text: str) -> str:
+    """Strip <think>...</think> blocks and incomplete trailing <think> blocks from text."""
+    text = re.sub(r"<think>[\s\S]*?</think>", "", text)
+    text = re.sub(r"<think>[\s\S]*$", "", text)
+    return text.strip()
 
 
 def _load_causal_model(model_name: str, dtype: torch.dtype, token: str):
@@ -94,7 +102,7 @@ def _run_inference(model, tokenizer, eval_data, model_type: str, batch_size: int
             results.append({
                 "question": eval_data[idx]["question"],
                 "expected": eval_data[idx]["expected"],
-                "answer": answer,
+                "answer": strip_think_tags(answer),
                 "model_type": model_type,
             })
 

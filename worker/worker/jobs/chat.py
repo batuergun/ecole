@@ -6,6 +6,7 @@ import time
 import threading
 
 from worker.client import APIClient
+from worker.jobs.metrics import strip_think_tags
 
 
 OUTPUT_DIR = os.environ.get("ECOLE_MODEL_DIR", "/tmp/ecole_models")
@@ -173,12 +174,12 @@ def _generate_response(
         accumulated += text
         token_count += 1
 
-        # Update DB every ~10 tokens
+        # Update DB every ~10 tokens (strip think tags from user-facing output)
         if token_count % 10 == 0:
-            client.update_chat_message(message_id, accumulated, "streaming")
+            client.update_chat_message(message_id, strip_think_tags(accumulated), "streaming")
 
     thread.join()
 
-    # Final update
-    client.update_chat_message(message_id, accumulated, "done")
+    # Final update (strip think tags from user-facing output)
+    client.update_chat_message(message_id, strip_think_tags(accumulated), "done")
     print(f"[chat] Generated {token_count} tokens for message {message_id}")

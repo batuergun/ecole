@@ -5,7 +5,7 @@ import os
 import time
 
 from worker.client import APIClient
-from worker.jobs.metrics import compute_metrics
+from worker.jobs.metrics import compute_metrics, strip_think_tags
 from worker.llm import LLMClient, create_llm_client
 
 
@@ -397,8 +397,10 @@ def _score_raw_answers(
         expected = entry["expected"]
         answer = entry["answer"]
 
-        score_data = _judge_answer(llm, question, expected, answer)
-        metrics = compute_metrics(answer, expected)
+        clean_answer = strip_think_tags(answer)
+        clean_expected = strip_think_tags(expected)
+        score_data = _judge_answer(llm, question, clean_expected, clean_answer)
+        metrics = compute_metrics(clean_answer, clean_expected)
 
         results.append({
             "question": question,
@@ -509,8 +511,10 @@ def _evaluate_model(
     # Score answers with LLM judge + deterministic metrics
     results = []
     for i, item in enumerate(eval_items):
-        score_data = _judge_answer(llm, item["question"], item["answer"], all_answers[i])
-        metrics = compute_metrics(all_answers[i], item["answer"])
+        clean_answer = strip_think_tags(all_answers[i])
+        clean_expected = strip_think_tags(item["answer"])
+        score_data = _judge_answer(llm, item["question"], clean_expected, clean_answer)
+        metrics = compute_metrics(clean_answer, clean_expected)
 
         results.append({
             "question": item["question"],
