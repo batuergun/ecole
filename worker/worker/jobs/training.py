@@ -141,6 +141,11 @@ def _run_hf_jobs(
 
     output_repo = f"{owner}/ecole-{project_name}-{model_short}"
 
+    # Trackio Space for metrics dashboard
+    trackio_space_id = f"{owner}/trackio"
+    trackio_url = f"https://huggingface.co/spaces/{owner}/trackio"
+    run_name = f"ecole-{project_name}-{training_run_id[:8]}"
+
     # Push dataset to HF Hub as a proper dataset repo
     from datasets import Dataset
 
@@ -172,6 +177,8 @@ def _run_hf_jobs(
             "ECOLE_LORA_CONFIG": json.dumps(lora_config_raw),
             "ECOLE_TRAINING_CONFIG": json.dumps(training_config_raw),
             "ECOLE_OUTPUT_REPO": output_repo,
+            "TRACKIO_SPACE_ID": trackio_space_id,
+            "ECOLE_RUN_NAME": run_name,
         },
         secrets={"HF_TOKEN": hf_token},
         token=hf_token,
@@ -187,6 +194,9 @@ def _run_hf_jobs(
 
     # Save HF job URL so the frontend can link to it
     client.set_hf_job_id(training_run_id, hf_job_url)
+
+    # Save Trackio dashboard URL
+    client.set_trackio_url(training_run_id, trackio_url)
 
     # Update training run status
     client.update_training_progress(training_run_id, epoch=0)

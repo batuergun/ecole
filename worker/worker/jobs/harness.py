@@ -155,8 +155,6 @@ def _build_context_section(context: dict) -> str:
     parts = []
     if context.get("purpose"):
         parts.append(f"**Model Purpose:** {context['purpose']}")
-    if context.get("response_format"):
-        parts.append(f"**Expected Response Format:** {context['response_format']}")
     if context.get("self_awareness"):
         parts.append(f"**Model Identity:** {context['self_awareness']}")
 
@@ -341,8 +339,6 @@ def _process_pdf(
 def _build_format_instructions(context: dict) -> str:
     """Build format instruction string from project context."""
     parts = []
-    if context.get("response_format"):
-        parts.append(f"- Answers should follow this format: {context['response_format']}")
     if context.get("self_awareness"):
         parts.append(f"\n- When relevant, the answer should reflect this identity: {context['self_awareness']}")
     return "".join(parts)

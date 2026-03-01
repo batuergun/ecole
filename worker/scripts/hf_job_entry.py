@@ -8,6 +8,7 @@
 #     "trl",
 #     "huggingface_hub",
 #     "accelerate",
+#     "trackio",
 # ]
 # ///
 """Ecole HF Job entry script — runs SFTTrainer + LoRA on HF infrastructure.
@@ -124,7 +125,8 @@ def main():
         bf16=use_bf16,
         save_strategy="epoch",
         save_total_limit=num_epochs,
-        report_to="none",
+        report_to="trackio",
+        run_name=os.environ.get("ECOLE_RUN_NAME", "ecole-training"),
         remove_unused_columns=False,
     )
 

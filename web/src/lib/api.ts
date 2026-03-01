@@ -189,6 +189,7 @@ export interface TrainingRun {
   learning_rate_current: number | null;
   output_model_path: string | null;
   hf_repo_id: string | null;
+  trackio_url: string | null;
   error_message: string | null;
   started_at: string | null;
   completed_at: string | null;

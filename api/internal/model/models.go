@@ -84,6 +84,7 @@ type TrainingRun struct {
 	LearningRateCur *float64        `json:"learning_rate_current" db:"learning_rate_current"`
 	OutputModelPath *string         `json:"output_model_path" db:"output_model_path"`
 	HFRepoID        *string         `json:"hf_repo_id" db:"hf_repo_id"`
+	TrackioURL      *string         `json:"trackio_url" db:"trackio_url"`
 	ErrorMessage    *string         `json:"error_message" db:"error_message"`
 	StartedAt       *time.Time      `json:"started_at" db:"started_at"`
 	CompletedAt     *time.Time      `json:"completed_at" db:"completed_at"`

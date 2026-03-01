@@ -355,6 +355,23 @@ func (h *WorkerHandler) SetHFDatasetRepo(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"ok": true})
 }
 
+// SetTrackioURL stores the Trackio dashboard URL on a training run.
+func (h *WorkerHandler) SetTrackioURL(c *gin.Context) {
+	tid := c.Param("tid")
+	var req struct {
+		URL string `json:"url" binding:"required"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	if err := h.store.SetTrackioURL(c.Request.Context(), tid, req.URL); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to set trackio URL"})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"ok": true})
+}
+
 // SetTrainingHFRepo sets the HF repo ID on a training run.
 func (h *WorkerHandler) SetTrainingHFRepo(c *gin.Context) {
 	tid := c.Param("tid")

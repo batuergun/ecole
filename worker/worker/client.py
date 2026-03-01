@@ -168,6 +168,12 @@ class APIClient:
             json={"repo_id": repo_id},
         )
 
+    def set_trackio_url(self, training_run_id: str, url: str) -> None:
+        self.http.post(
+            f"{self.api_url}/api/worker/training-runs/{training_run_id}/trackio-url",
+            json={"url": url},
+        )
+
     def set_training_hf_repo(self, training_run_id: str, repo_id: str) -> None:
         self.http.post(
             f"{self.api_url}/api/worker/training-runs/{training_run_id}/hf-repo",

@@ -15,6 +15,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Terminal } from "lucide-react";
 
 export default function NewProject() {
   const navigate = useNavigate();
@@ -23,10 +24,10 @@ export default function NewProject() {
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [purpose, setPurpose] = useState("");
-  const [responseFormat, setResponseFormat] = useState("");
   const [selfAwareness, setSelfAwareness] = useState("");
   const [llmProvider, setLlmProvider] = useState("anthropic");
   const [qaPerChunk, setQaPerChunk] = useState("10");
+  const [advancedMode, setAdvancedMode] = useState(false);
 
   const mutation = useMutation({
     mutationFn: () =>
@@ -35,7 +36,6 @@ export default function NewProject() {
         description,
         context: {
           purpose,
-          response_format: responseFormat,
           self_awareness: selfAwareness,
           llm_provider: llmProvider,
           qa_per_chunk: qaPerChunk,
@@ -100,36 +100,6 @@ export default function NewProject() {
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="space-y-1.5">
-              <Label htmlFor="llm-provider">LLM Provider</Label>
-              <Select value={llmProvider} onValueChange={setLlmProvider}>
-                <SelectTrigger id="llm-provider">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="anthropic">Anthropic (Claude)</SelectItem>
-                  <SelectItem value="mistral">Mistral</SelectItem>
-                </SelectContent>
-              </Select>
-              <p className="mt-1 text-xs text-muted-foreground">
-                Used for Q&A generation and LLM-as-judge benchmarking
-              </p>
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="qa-per-chunk">Q&A Pairs per Chunk</Label>
-              <Input
-                id="qa-per-chunk"
-                type="number"
-                min={1}
-                max={20}
-                value={qaPerChunk}
-                onChange={(e) => setQaPerChunk(e.target.value)}
-              />
-              <p className="mt-1 text-xs text-muted-foreground">
-                Number of question-answer pairs generated per text chunk. Higher
-                values produce more training data per document.
-              </p>
-            </div>
-            <div className="space-y-1.5">
               <Label htmlFor="purpose">Model Purpose</Label>
               <Textarea
                 id="purpose"
@@ -137,16 +107,6 @@ export default function NewProject() {
                 onChange={(e) => setPurpose(e.target.value)}
                 placeholder="Describe what the fine-tuned model should do. This guides Q&A generation from your data."
                 rows={3}
-              />
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="format">Expected Response Format</Label>
-              <Textarea
-                id="format"
-                value={responseFormat}
-                onChange={(e) => setResponseFormat(e.target.value)}
-                placeholder="e.g. JSON, bullet points, conversational, technical..."
-                rows={2}
               />
             </div>
             <div className="space-y-1.5">
@@ -159,6 +119,55 @@ export default function NewProject() {
                 rows={2}
               />
             </div>
+
+            {/* Advanced Mode Toggle */}
+            <button
+              type="button"
+              onClick={() => setAdvancedMode(!advancedMode)}
+              className={`inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-mono border transition-colors ${
+                advancedMode
+                  ? "border-ecole-orange bg-ecole-orange/10 text-ecole-orange"
+                  : "border-border text-muted-foreground hover:text-foreground hover:border-muted-foreground"
+              }`}
+            >
+              <Terminal className="h-3 w-3" />
+              Advanced
+            </button>
+
+            {advancedMode && (
+              <>
+                <div className="space-y-1.5">
+                  <Label htmlFor="llm-provider">LLM Provider</Label>
+                  <Select value={llmProvider} onValueChange={setLlmProvider}>
+                    <SelectTrigger id="llm-provider">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="anthropic">Anthropic (Claude)</SelectItem>
+                      <SelectItem value="mistral">Mistral</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    Used for Q&A generation and LLM-as-judge benchmarking
+                  </p>
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="qa-per-chunk">Q&A Pairs per Chunk</Label>
+                  <Input
+                    id="qa-per-chunk"
+                    type="number"
+                    min={1}
+                    max={20}
+                    value={qaPerChunk}
+                    onChange={(e) => setQaPerChunk(e.target.value)}
+                  />
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    Number of question-answer pairs generated per text chunk. Higher
+                    values produce more training data per document.
+                  </p>
+                </div>
+              </>
+            )}
           </CardContent>
         </Card>
 

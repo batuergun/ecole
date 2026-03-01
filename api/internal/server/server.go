@@ -114,6 +114,7 @@ func New(cfg *config.Config, s *store.Store, st *storage.Storage, q *queue.Queue
 		worker.POST("/training-runs/:tid/hf-job", workerH.SetHFJobID)
 		worker.POST("/training-runs/:tid/hf-dataset-repo", workerH.SetHFDatasetRepo)
 		worker.POST("/training-runs/:tid/hf-repo", workerH.SetTrainingHFRepo)
+		worker.POST("/training-runs/:tid/trackio-url", workerH.SetTrackioURL)
 		worker.PUT("/training-runs/:tid/logs", workerH.UpdateTrainingLogs)
 
 		// Benchmark operations

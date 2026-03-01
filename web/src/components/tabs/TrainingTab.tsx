@@ -23,11 +23,12 @@ import {
   Cpu,
   Trash2,
   Settings,
-
+  Terminal,
   Plus,
   Clock,
   AlertTriangle,
   Database,
+  LineChart,
 } from "lucide-react";
 
 function formatStatus(s: string): string {
@@ -80,6 +81,7 @@ export function TrainingTab({ projectId }: { projectId: string }) {
   const [hfFlavor, setHfFlavor] = useState(RECOMMENDED_FLAVORS[MODEL_OPTIONS[0].value] || "a10g-small");
   const [hfNamespace, setHfNamespace] = useState("");
   const [showNewRunDialog, setShowNewRunDialog] = useState(false);
+  const [advancedMode, setAdvancedMode] = useState(false);
 
   const { data: keys } = useQuery({
     queryKey: ["settings-keys"],
@@ -205,76 +207,94 @@ export function TrainingTab({ projectId }: { projectId: string }) {
         </select>
       </div>
 
-      <div className="grid grid-cols-2 gap-4">
-        <div>
-          <Label>Epochs</Label>
-          <Input value={epochs} onChange={(e) => setEpochs(e.target.value)} type="number" min="1" max="10" />
-        </div>
-        <div>
-          <Label>Batch Size</Label>
-          <Input value={batchSize} onChange={(e) => setBatchSize(e.target.value)} type="number" min="1" max="16" />
-        </div>
-        <div>
-          <Label>Learning Rate</Label>
-          <Input value={lr} onChange={(e) => setLr(e.target.value)} />
-        </div>
-        <div>
-          <Label>LoRA Rank (r)</Label>
-          <Input value={loraR} onChange={(e) => setLoraR(e.target.value)} type="number" min="4" max="64" />
-        </div>
-      </div>
+      {/* Advanced Mode Toggle */}
+      <button
+        type="button"
+        onClick={() => setAdvancedMode(!advancedMode)}
+        className={`inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-mono border transition-colors ${
+          advancedMode
+            ? "border-ecole-orange bg-ecole-orange/10 text-ecole-orange"
+            : "border-border text-muted-foreground hover:text-foreground hover:border-muted-foreground"
+        }`}
+      >
+        <Terminal className="h-3 w-3" />
+        Advanced
+      </button>
 
-      {computeMode === "hf_jobs" && (
+      {advancedMode && (
         <>
-          <div>
-            <Label className="flex items-center gap-1.5">
-              <Cpu className="h-3.5 w-3.5" />
-              Hardware
-            </Label>
-            <div className="grid grid-cols-1 gap-1.5 mt-1.5">
-              {HF_FLAVOR_OPTIONS.map((opt) => {
-                const isRecommended = RECOMMENDED_FLAVORS[baseModel] === opt.value;
-                const isSelected = hfFlavor === opt.value;
-                return (
-                  <button
-                    key={opt.value}
-                    type="button"
-                    onClick={() => setHfFlavor(opt.value)}
-                    className={`flex items-center justify-between border p-2.5 text-left text-sm transition-colors ${
-                      isSelected
-                        ? "border-ecole-orange bg-ecole-orange/5"
-                        : "border-input hover:border-muted-foreground"
-                    }`}
-                  >
-                    <div className="flex items-center gap-2">
-                      <span className="font-mono text-xs font-medium">{opt.label}</span>
-                      {isRecommended && (
-                        <span className="text-[10px] font-mono px-1.5 py-0.5 bg-ecole-orange/10 text-ecole-orange border border-ecole-orange/20">
-                          Recommended
-                        </span>
-                      )}
-                    </div>
-                    <div className="flex items-center gap-3 text-xs text-muted-foreground">
-                      <span>{opt.description}</span>
-                      <span className="font-mono">{opt.vram}</span>
-                    </div>
-                  </button>
-                );
-              })}
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <Label>Epochs</Label>
+              <Input value={epochs} onChange={(e) => setEpochs(e.target.value)} type="number" min="1" max="10" />
+            </div>
+            <div>
+              <Label>Batch Size</Label>
+              <Input value={batchSize} onChange={(e) => setBatchSize(e.target.value)} type="number" min="1" max="16" />
+            </div>
+            <div>
+              <Label>Learning Rate</Label>
+              <Input value={lr} onChange={(e) => setLr(e.target.value)} />
+            </div>
+            <div>
+              <Label>LoRA Rank (r)</Label>
+              <Input value={loraR} onChange={(e) => setLoraR(e.target.value)} type="number" min="4" max="64" />
             </div>
           </div>
 
-          <div>
-            <Label>Organization Namespace</Label>
-            <Input
-              value={hfNamespace}
-              onChange={(e) => setHfNamespace(e.target.value)}
-              placeholder="Leave empty for personal account"
-            />
-            <p className="text-xs text-muted-foreground mt-1">
-              Org name to run the job under (billing & ownership). Leave empty to use your personal account.
-            </p>
-          </div>
+          {computeMode === "hf_jobs" && (
+            <>
+              <div>
+                <Label className="flex items-center gap-1.5">
+                  <Cpu className="h-3.5 w-3.5" />
+                  Hardware
+                </Label>
+                <div className="grid grid-cols-1 gap-1.5 mt-1.5">
+                  {HF_FLAVOR_OPTIONS.map((opt) => {
+                    const isRecommended = RECOMMENDED_FLAVORS[baseModel] === opt.value;
+                    const isSelected = hfFlavor === opt.value;
+                    return (
+                      <button
+                        key={opt.value}
+                        type="button"
+                        onClick={() => setHfFlavor(opt.value)}
+                        className={`flex items-center justify-between border p-2.5 text-left text-sm transition-colors ${
+                          isSelected
+                            ? "border-ecole-orange bg-ecole-orange/5"
+                            : "border-input hover:border-muted-foreground"
+                        }`}
+                      >
+                        <div className="flex items-center gap-2">
+                          <span className="font-mono text-xs font-medium">{opt.label}</span>
+                          {isRecommended && (
+                            <span className="text-[10px] font-mono px-1.5 py-0.5 bg-ecole-orange/10 text-ecole-orange border border-ecole-orange/20">
+                              Recommended
+                            </span>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-3 text-xs text-muted-foreground">
+                          <span>{opt.description}</span>
+                          <span className="font-mono">{opt.vram}</span>
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <div>
+                <Label>Organization Namespace</Label>
+                <Input
+                  value={hfNamespace}
+                  onChange={(e) => setHfNamespace(e.target.value)}
+                  placeholder="Leave empty for personal account"
+                />
+                <p className="text-xs text-muted-foreground mt-1">
+                  Org name to run the job under (billing & ownership). Leave empty to use your personal account.
+                </p>
+              </div>
+            </>
+          )}
         </>
       )}
 
@@ -355,6 +375,21 @@ export function TrainingTab({ projectId }: { projectId: string }) {
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
+                    {run.trackio_url && (
+                      <a
+                        href={run.trackio_url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                      >
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="text-ecole-orange hover:text-ecole-orange h-7 w-7 p-0"
+                        >
+                          <LineChart className="h-3.5 w-3.5" />
+                        </Button>
+                      </a>
+                    )}
                     <Badge
                       className={
                         run.status === "completed"
