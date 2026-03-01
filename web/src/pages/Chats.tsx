@@ -1,14 +1,30 @@
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
+import { toast } from "sonner";
 import { api, type ChatSessionWithDetails } from "@/lib/api";
 import { Badge } from "@/components/ui/badge";
-import { MessageSquare, Loader2 } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { MessageSquare, Loader2, Trash2 } from "lucide-react";
 
 export default function Chats() {
+  const queryClient = useQueryClient();
+
   const { data: sessions, isLoading } = useQuery({
     queryKey: ["all-chat-sessions"],
     queryFn: () => api.listAllChatSessions(),
     refetchInterval: 10000,
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: ({ projectId, sessionId }: { projectId: string; sessionId: string }) =>
+      api.deleteChatSession(projectId, sessionId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["all-chat-sessions"] });
+      toast.success("Chat session deleted");
+    },
+    onError: (err: Error) => {
+      toast.error(err.message || "Failed to delete chat session");
+    },
   });
 
   const statusBadge = (status: string) => {
@@ -93,6 +109,18 @@ export default function Chats() {
                     })}
                   </span>
                   {statusBadge(s.status)}
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      deleteMutation.mutate({ projectId: s.project_id, sessionId: s.id });
+                    }}
+                    className="text-muted-foreground hover:text-destructive h-7 w-7 p-0"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </Button>
                 </div>
               </Link>
             );
