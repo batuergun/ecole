@@ -260,6 +260,12 @@ def _run_hf_jobs(
             client.fail_training_run(training_run_id, error_msg)
             raise RuntimeError(f"HF Job failed: {error_msg}")
 
+        elif stage == "CANCELLED":
+            client.cancel_training_run(training_run_id)
+            client.update_project_status(project_id, "created")
+            print(f"[training:hf_jobs] Job {hf_job_id} was cancelled")
+            return
+
         elif stage in ("RUNNING", "STARTING"):
             # Parse metrics from logs and report progress
             metrics = _parse_hf_metrics(accumulated_logs)

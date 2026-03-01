@@ -134,6 +134,14 @@ func (s *Store) FailTrainingRun(ctx context.Context, id, errorMsg string) error 
 	return err
 }
 
+func (s *Store) CancelTrainingRun(ctx context.Context, id string) error {
+	_, err := s.pool.Exec(ctx, `
+		UPDATE training_runs SET status = 'cancelled', completed_at = NOW(), updated_at = NOW()
+		WHERE id = $1
+	`, id)
+	return err
+}
+
 func (s *Store) SetTrainingHFRepo(ctx context.Context, id, repoID string) error {
 	_, err := s.pool.Exec(ctx, `
 		UPDATE training_runs SET hf_repo_id = $2, updated_at = NOW() WHERE id = $1

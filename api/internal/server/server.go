@@ -125,6 +125,7 @@ func New(cfg *config.Config, s *store.Store, st *storage.Storage, q *queue.Queue
 		worker.PATCH("/training-runs/:tid/progress", workerH.UpdateTrainingProgress)
 		worker.POST("/training-runs/:tid/complete", workerH.CompleteTrainingRun)
 		worker.POST("/training-runs/:tid/fail", workerH.FailTrainingRun)
+		worker.POST("/training-runs/:tid/cancel", workerH.CancelTrainingRun)
 		worker.POST("/training-runs/:tid/hf-job", workerH.SetHFJobID)
 		worker.POST("/training-runs/:tid/hf-dataset-repo", workerH.SetHFDatasetRepo)
 		worker.POST("/training-runs/:tid/hf-repo", workerH.SetTrainingHFRepo)

@@ -38,6 +38,8 @@ function statusColor(status: string): string {
       return "bg-primary text-primary-foreground";
     case "failed":
       return "bg-destructive text-white";
+    case "cancelled":
+      return "bg-muted text-muted-foreground";
     case "training":
     case "claimed":
     case "downloading":
@@ -182,7 +184,7 @@ export default function Jobs() {
 
   const activeCount = items.filter((i) => {
     const s = i.data.status;
-    return s !== "completed" && s !== "failed";
+    return s !== "completed" && s !== "failed" && s !== "cancelled";
   }).length;
 
   const toggleLogs = (id: string) => {
@@ -300,15 +302,13 @@ export default function Jobs() {
                       <Badge className={statusColor(run.status)}>
                         {formatStatus(run.status)}
                       </Badge>
-                      {(run.status === "completed" || run.status === "failed") && (
-                        <button
-                          onClick={() => deleteTrainingMutation.mutate({ projectId: run.project_id, runId: run.id })}
-                          disabled={deleteTrainingMutation.isPending}
-                          className="text-muted-foreground hover:text-destructive transition-colors disabled:opacity-50"
-                        >
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </button>
-                      )}
+                      <button
+                        onClick={() => deleteTrainingMutation.mutate({ projectId: run.project_id, runId: run.id })}
+                        disabled={deleteTrainingMutation.isPending}
+                        className="text-muted-foreground hover:text-destructive transition-colors disabled:opacity-50"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </button>
                     </div>
                   </div>
 
@@ -429,15 +429,13 @@ export default function Jobs() {
                     <Badge className={statusColor(job.status)}>
                       {formatStatus(job.status)}
                     </Badge>
-                    {(job.status === "completed" || job.status === "failed") && (
-                      <button
-                        onClick={() => deleteJobMutation.mutate({ projectId: job.project_id, jobId: job.id })}
-                        disabled={deleteJobMutation.isPending}
-                        className="text-muted-foreground hover:text-destructive transition-colors disabled:opacity-50"
-                      >
-                        <Trash2 className="h-3.5 w-3.5" />
-                      </button>
-                    )}
+                    <button
+                      onClick={() => deleteJobMutation.mutate({ projectId: job.project_id, jobId: job.id })}
+                      disabled={deleteJobMutation.isPending}
+                      className="text-muted-foreground hover:text-destructive transition-colors disabled:opacity-50"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </button>
                   </div>
                 </div>
 

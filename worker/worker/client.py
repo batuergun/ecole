@@ -156,6 +156,11 @@ class APIClient:
             json={"error": error},
         )
 
+    def cancel_training_run(self, training_run_id: str) -> None:
+        self.http.post(
+            f"{self.api_url}/api/worker/training-runs/{training_run_id}/cancel",
+        )
+
     def set_hf_job_id(self, training_run_id: str, job_id: str) -> None:
         self.http.post(
             f"{self.api_url}/api/worker/training-runs/{training_run_id}/hf-job",

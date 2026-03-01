@@ -321,6 +321,16 @@ func (h *WorkerHandler) FailTrainingRun(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"ok": true})
 }
 
+// CancelTrainingRun marks a training run as cancelled.
+func (h *WorkerHandler) CancelTrainingRun(c *gin.Context) {
+	tid := c.Param("tid")
+	if err := h.store.CancelTrainingRun(c.Request.Context(), tid); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to cancel training run"})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"ok": true})
+}
+
 // SetHFJobID stores the HuggingFace job URL on a training run.
 func (h *WorkerHandler) SetHFJobID(c *gin.Context) {
 	tid := c.Param("tid")

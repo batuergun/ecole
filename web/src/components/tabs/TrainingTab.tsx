@@ -351,6 +351,7 @@ export function TrainingTab({ projectId }: { projectId: string }) {
         <div className="space-y-3">
           {runs.map((run: TrainingRun) => {
             const isFailed = run.status === "failed";
+            const isCancelled = run.status === "cancelled";
             const isActive = run.status === "training" || run.status === "queued" || run.status === "downloading";
             const isHfTokenError = isFailed && run.error_message?.toLowerCase().includes("huggingface token");
 
@@ -402,23 +403,23 @@ export function TrainingTab({ projectId }: { projectId: string }) {
                           ? "bg-primary text-primary-foreground"
                           : isFailed
                             ? "bg-destructive text-white"
-                            : isActive
-                              ? "bg-ecole-orange text-white"
-                              : ""
+                            : isCancelled
+                              ? "bg-muted text-muted-foreground"
+                              : isActive
+                                ? "bg-ecole-orange text-white"
+                                : ""
                       }
                     >
                       {formatStatus(run.status)}
                     </Badge>
-                    {(isFailed || run.status === "completed") && (
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => deleteMutation.mutate(run.id)}
-                        className="text-muted-foreground hover:text-destructive h-7 w-7 p-0"
-                      >
-                        <Trash2 className="h-3.5 w-3.5" />
-                      </Button>
-                    )}
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => deleteMutation.mutate(run.id)}
+                      className="text-muted-foreground hover:text-destructive h-7 w-7 p-0"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </Button>
                   </div>
                 </div>
 
