@@ -314,6 +314,45 @@
       color: var(--muted);
     }
 
+    /* ── Step slide (split layout) ── */
+    .slide-step {
+      display: grid;
+      grid-template-columns: 1fr 1.4fr;
+      gap: 120px;
+      align-content: center;
+      align-items: center;
+    }
+
+    .slide-step .step-text .number {
+      font-family: var(--font-mono);
+      font-size: 120px;
+      font-weight: 700;
+      color: var(--orange);
+      line-height: 1;
+      margin-bottom: 40px;
+    }
+
+    .slide-step .step-text h2 {
+      margin-bottom: 48px;
+    }
+
+    .slide-step .step-text p {
+      font-size: 40px;
+    }
+
+    .slide-step .step-screenshots {
+      display: flex;
+      flex-direction: column;
+      gap: 40px;
+    }
+
+    .slide-step .step-screenshots img {
+      width: 100%;
+      height: auto;
+      display: block;
+      border: 3px solid var(--border);
+    }
+
     /* ── Orange dot marker (brand element) ── */
     .dot {
       display: inline-block;
@@ -436,40 +475,17 @@
   </section>
 
   <!-- ════════════════════════════════════════════
-       SLIDE 4 — HOW IT WORKS
+       SLIDE 4 — STEP 1: UPLOAD
        ════════════════════════════════════════════ -->
-  <section class="slide-content">
-    <div class="header">
-      <div class="label">How It Works</div>
-      <h2>Four steps to your<br>fine-tuned model.</h2>
+  <section class="slide-step">
+    <div class="step-text">
+      <div class="label">Step 1</div>
+      <div class="number">01</div>
+      <h2>Upload your<br>documents.</h2>
+      <p>Create a project, define your model's purpose, and drop in your PDFs or text files. ecole handles ingestion and chunking automatically.</p>
     </div>
-    <div class="body">
-      <div class="grid-4">
-        <div class="card">
-          <img src="screenshots/Screenshot 2026-03-01 at 14.51.41.png" alt="Upload data view">
-          <span class="number">01</span>
-          <h3>Upload</h3>
-          <p>Drop in your PDFs, text files, or documents. ecole ingests and processes them automatically.</p>
-        </div>
-        <div class="card">
-          <img src="screenshots/Screenshot 2026-03-01 at 14.52.34.png" alt="Generated dataset table">
-          <span class="number">02</span>
-          <h3>Generate</h3>
-          <p>AI-powered dataset generation creates high-quality training pairs from your source material.</p>
-        </div>
-        <div class="card">
-          <img src="screenshots/Screenshot 2026-03-01 at 14.58.12.png" alt="Training completed">
-          <span class="number">03</span>
-          <h3>Train</h3>
-          <p>Launch on HuggingFace Jobs with your choice of GPU. Model is pushed to the Hub automatically.</p>
-        </div>
-        <div class="card">
-          <img src="screenshots/Screenshot 2026-03-01 at 14.59.34.png" alt="Evaluation results">
-          <span class="number">04</span>
-          <h3>Evaluate</h3>
-          <p>Compare your fine-tuned model against the base and teacher models with automated benchmarks.</p>
-        </div>
-      </div>
+    <div class="step-screenshots">
+      <img src="screenshots/Screenshot 2026-03-01 at 14.51.41.png" alt="Project upload view">
     </div>
     <div class="slide-footer">
       <span class="page">04</span>
@@ -477,7 +493,61 @@
   </section>
 
   <!-- ════════════════════════════════════════════
-       SLIDE 5 — CLOSING
+       SLIDE 5 — STEP 2: GENERATE
+       ════════════════════════════════════════════ -->
+  <section class="slide-step">
+    <div class="step-text">
+      <div class="label">Step 2</div>
+      <div class="number">02</div>
+      <h2>Generate a<br>training dataset.</h2>
+      <p>AI-powered extraction creates high-quality question-answer pairs from your source material. Review, filter, and refine before training.</p>
+    </div>
+    <div class="step-screenshots">
+      <img src="screenshots/Screenshot 2026-03-01 at 14.52.34.png" alt="Generated dataset table">
+    </div>
+    <div class="slide-footer">
+      <span class="page">05</span>
+    </div>
+  </section>
+
+  <!-- ════════════════════════════════════════════
+       SLIDE 6 — STEP 3: TRAIN
+       ════════════════════════════════════════════ -->
+  <section class="slide-step">
+    <div class="step-text">
+      <div class="label">Step 3</div>
+      <div class="number">03</div>
+      <h2>Train your<br>model.</h2>
+      <p>Pick a base model, choose your GPU hardware, and launch training on HuggingFace Jobs. Your fine-tuned model is pushed to the Hub automatically.</p>
+    </div>
+    <div class="step-screenshots">
+      <img src="screenshots/Screenshot 2026-03-01 at 14.52.47.png" alt="Training configuration">
+    </div>
+    <div class="slide-footer">
+      <span class="page">06</span>
+    </div>
+  </section>
+
+  <!-- ════════════════════════════════════════════
+       SLIDE 7 — STEP 4: EVALUATE
+       ════════════════════════════════════════════ -->
+  <section class="slide-step">
+    <div class="step-text">
+      <div class="label">Step 4</div>
+      <div class="number">04</div>
+      <h2>Evaluate the<br>results.</h2>
+      <p>Compare your fine-tuned model against the base and teacher models with automated benchmarks. See exactly where your model improved.</p>
+    </div>
+    <div class="step-screenshots">
+      <img src="screenshots/Screenshot 2026-03-01 at 15.15.29.png" alt="Evaluation metrics">
+    </div>
+    <div class="slide-footer">
+      <span class="page">07</span>
+    </div>
+  </section>
+
+  <!-- ════════════════════════════════════════════
+       SLIDE 8 — CLOSING
        ════════════════════════════════════════════ -->
   <section class="slide-closing">
     <div class="logo logo-large">
