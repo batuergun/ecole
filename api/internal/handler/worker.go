@@ -433,6 +433,80 @@ func (h *WorkerHandler) CompleteBenchmarkRecord(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"ok": true})
 }
 
+// --- Chat session operations ---
+
+// GetChatSession returns chat session details for the worker.
+func (h *WorkerHandler) GetChatSession(c *gin.Context) {
+	sid := c.Param("sid")
+	session, err := h.store.GetChatSessionByID(c.Request.Context(), sid)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "chat session not found"})
+		return
+	}
+	c.JSON(http.StatusOK, session)
+}
+
+// UpdateChatSessionStatus lets the worker update chat session status.
+func (h *WorkerHandler) UpdateChatSessionStatus(c *gin.Context) {
+	sid := c.Param("sid")
+	var req struct {
+		Status string `json:"status" binding:"required"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	if err := h.store.UpdateChatSessionStatus(c.Request.Context(), sid, req.Status); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update status"})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"ok": true})
+}
+
+// GetPendingChatMessage returns the next pending assistant message for a session.
+func (h *WorkerHandler) GetPendingChatMessage(c *gin.Context) {
+	sid := c.Param("sid")
+	msg, err := h.store.GetPendingChatMessage(c.Request.Context(), sid)
+	if err != nil {
+		c.JSON(http.StatusNoContent, nil)
+		return
+	}
+	c.JSON(http.StatusOK, msg)
+}
+
+// ListChatMessages returns all messages for a chat session (for worker context building).
+func (h *WorkerHandler) ListChatMessages(c *gin.Context) {
+	sid := c.Param("sid")
+	messages, err := h.store.ListChatMessages(c.Request.Context(), sid)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to list messages"})
+		return
+	}
+	if messages == nil {
+		c.JSON(http.StatusOK, []any{})
+		return
+	}
+	c.JSON(http.StatusOK, messages)
+}
+
+// UpdateChatMessage lets the worker update a chat message content and status.
+func (h *WorkerHandler) UpdateChatMessage(c *gin.Context) {
+	mid := c.Param("mid")
+	var req struct {
+		Content string `json:"content"`
+		Status  string `json:"status" binding:"required"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	if err := h.store.UpdateChatMessage(c.Request.Context(), mid, req.Content, req.Status); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update message"})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"ok": true})
+}
+
 // UpdateProjectStatus lets the worker update project status.
 func (h *WorkerHandler) UpdateProjectStatus(c *gin.Context) {
 	projectID := c.Param("pid")

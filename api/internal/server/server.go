@@ -28,6 +28,7 @@ func New(cfg *config.Config, s *store.Store, st *storage.Storage, q *queue.Queue
 	trainingH := handler.NewTrainingHandler(s, q)
 	benchmarkH := handler.NewBenchmarkHandler(s, q)
 	workerH := handler.NewWorkerHandler(s, q, st, cfg)
+	chatH := handler.NewChatHandler(s, q, cfg)
 	activityH := handler.NewActivityHandler(s)
 	settingsH := handler.NewSettingsHandler(s, cfg)
 
@@ -84,6 +85,16 @@ func New(cfg *config.Config, s *store.Store, st *storage.Storage, q *queue.Queue
 		// Benchmark
 		api.POST("/projects/:id/benchmark", benchmarkH.Trigger)
 		api.GET("/projects/:id/benchmark", benchmarkH.List)
+		api.GET("/projects/:id/benchmark/status", benchmarkH.JobStatus)
+
+		// Chat
+		api.POST("/projects/:id/chat", chatH.CreateSession)
+		api.GET("/projects/:id/chat", chatH.ListSessions)
+		api.GET("/projects/:id/chat/:sid", chatH.GetSession)
+		api.DELETE("/projects/:id/chat/:sid", chatH.DeleteSession)
+		api.POST("/projects/:id/chat/:sid/messages", chatH.SendMessage)
+		api.GET("/projects/:id/chat/:sid/messages", chatH.ListMessages)
+		api.GET("/projects/:id/chat/:sid/stream", chatH.Stream)
 
 		// Jobs (generic — works for any job type)
 		api.DELETE("/projects/:id/jobs/:jid", benchmarkH.Delete)
@@ -120,6 +131,13 @@ func New(cfg *config.Config, s *store.Store, st *storage.Storage, q *queue.Queue
 		// Benchmark operations
 		worker.POST("/benchmarks", workerH.CreateBenchmarkRecord)
 		worker.POST("/benchmarks/:bid/complete", workerH.CompleteBenchmarkRecord)
+
+		// Chat session operations
+		worker.GET("/chat-sessions/:sid", workerH.GetChatSession)
+		worker.PATCH("/chat-sessions/:sid/status", workerH.UpdateChatSessionStatus)
+		worker.GET("/chat-sessions/:sid/pending-message", workerH.GetPendingChatMessage)
+		worker.GET("/chat-sessions/:sid/messages", workerH.ListChatMessages)
+		worker.PATCH("/chat-messages/:mid", workerH.UpdateChatMessage)
 	}
 
 	return r

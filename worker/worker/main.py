@@ -3,7 +3,7 @@ import traceback
 
 from worker.config import Config
 from worker.client import APIClient
-from worker.jobs import harness, training, benchmark
+from worker.jobs import harness, training, benchmark, chat
 from worker.hf import upload as hf_upload
 
 
@@ -45,6 +45,8 @@ def main():
                 benchmark.run(client, job)
             elif job_type == "hf_upload":
                 hf_upload.run(client, job)
+            elif job_type == "chat_session":
+                chat.run(client, job)
             else:
                 raise ValueError(f"Unknown job type: {job_type}")
 
@@ -56,14 +58,18 @@ def main():
             if project_id and job_type == "harness":
                 client.update_project_status(project_id, "created")
             elif project_id and job_type == "training":
-                # Ensure training run is marked failed so it doesn't stay stuck
                 try:
                     training_run_id = payload.get("training_run_id", "")
                     if training_run_id:
                         client.fail_training_run(training_run_id, str(e))
                         client.update_project_status(project_id, "created")
                 except Exception:
-                    print(f"Failed to mark training run as failed")
+                    print("Failed to mark training run as failed")
+            elif project_id and job_type == "benchmark":
+                try:
+                    client.update_project_status(project_id, "trained")
+                except Exception:
+                    print("Failed to reset project status after benchmark failure")
             print(f"Failed job {job_id}: {e}")
 
 

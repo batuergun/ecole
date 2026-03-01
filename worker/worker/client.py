@@ -180,6 +180,36 @@ class APIClient:
             json={"repo_id": repo_id},
         )
 
+    # --- Chat sessions ---
+
+    def update_chat_session_status(self, session_id: str, status: str) -> None:
+        self.http.patch(
+            f"{self.api_url}/api/worker/chat-sessions/{session_id}/status",
+            json={"status": status},
+        )
+
+    def get_pending_chat_message(self, session_id: str) -> dict | None:
+        resp = self.http.get(
+            f"{self.api_url}/api/worker/chat-sessions/{session_id}/pending-message",
+        )
+        if resp.status_code == 204:
+            return None
+        resp.raise_for_status()
+        return resp.json()
+
+    def list_chat_messages(self, session_id: str) -> list[dict]:
+        resp = self.http.get(
+            f"{self.api_url}/api/worker/chat-sessions/{session_id}/messages",
+        )
+        resp.raise_for_status()
+        return resp.json()
+
+    def update_chat_message(self, message_id: str, content: str, status: str) -> None:
+        self.http.patch(
+            f"{self.api_url}/api/worker/chat-messages/{message_id}",
+            json={"content": content, "status": status},
+        )
+
     # --- Benchmarks ---
 
     def create_benchmark(self, training_run_id: str, project_id: str, model_type: str, epoch: int | None = None) -> dict:

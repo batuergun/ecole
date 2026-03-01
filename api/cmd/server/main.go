@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
 	"github.com/batuhanergun/ecole/api/internal/config"
 	"github.com/batuhanergun/ecole/api/internal/queue"
@@ -60,6 +61,25 @@ func main() {
 
 	// Server
 	r := server.New(cfg, s, st, q)
+
+	// Background: reset stale claimed jobs every 5 minutes (30-min timeout)
+	go func() {
+		ticker := time.NewTicker(5 * time.Minute)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+				n, err := q.ResetStaleClaims(ctx, 30*time.Minute)
+				if err != nil {
+					log.Printf("ResetStaleClaims error: %v", err)
+				} else if n > 0 {
+					log.Printf("Reset %d stale claimed jobs", n)
+				}
+			}
+		}
+	}()
 
 	// Graceful shutdown
 	go func() {

@@ -67,6 +67,23 @@ func (h *BenchmarkHandler) Delete(c *gin.Context) {
 	c.Status(http.StatusNoContent)
 }
 
+func (h *BenchmarkHandler) JobStatus(c *gin.Context) {
+	userID := middleware.GetUserID(c)
+	projectID := c.Param("id")
+
+	if _, err := h.store.GetProject(c.Request.Context(), projectID, userID); err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "project not found"})
+		return
+	}
+
+	job, err := h.queue.GetLatestJobByType(c.Request.Context(), projectID, "benchmark")
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "no benchmark job found"})
+		return
+	}
+	c.JSON(http.StatusOK, job)
+}
+
 func (h *BenchmarkHandler) List(c *gin.Context) {
 	userID := middleware.GetUserID(c)
 	projectID := c.Param("id")

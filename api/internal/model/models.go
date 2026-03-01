@@ -135,3 +135,27 @@ type Worker struct {
 	Capabilities  json.RawMessage `json:"capabilities" db:"capabilities"`
 	CreatedAt     time.Time       `json:"created_at" db:"created_at"`
 }
+
+type ChatSession struct {
+	ID               string    `json:"id" db:"id"`
+	ProjectID        string    `json:"project_id" db:"project_id"`
+	TrainingRunID    string    `json:"training_run_id" db:"training_run_id"`
+	InferenceMode    string    `json:"inference_mode" db:"inference_mode"`
+	HFEndpointName   *string   `json:"hf_endpoint_name" db:"hf_endpoint_name"`
+	HFEndpointURL    *string   `json:"hf_endpoint_url" db:"hf_endpoint_url"`
+	HFEndpointStatus *string   `json:"hf_endpoint_status" db:"hf_endpoint_status"`
+	JobID            *string   `json:"job_id" db:"job_id"`
+	Status           string    `json:"status" db:"status"`
+	ErrorMessage     *string   `json:"error_message" db:"error_message"`
+	CreatedAt        time.Time `json:"created_at" db:"created_at"`
+	UpdatedAt        time.Time `json:"updated_at" db:"updated_at"`
+}
+
+type ChatMessage struct {
+	ID        string    `json:"id" db:"id"`
+	SessionID string    `json:"session_id" db:"session_id"`
+	Role      string    `json:"role" db:"role"`
+	Content   string    `json:"content" db:"content"`
+	Status    string    `json:"status" db:"status"`
+	CreatedAt time.Time `json:"created_at" db:"created_at"`
+}
