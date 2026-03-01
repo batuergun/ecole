@@ -143,10 +143,13 @@ export function BenchmarkTab({ projectId }: { projectId: string }) {
   const failedBenchmarks = benchmarks?.filter((b: Benchmark) => b.status === "failed") ?? [];
   const hasAnyCompleted = benchmarks?.some((b: Benchmark) => b.status === "completed") ?? false;
 
-  // Check if a benchmark job is actively running
+  // Check if a benchmark job is actively running.
+  // If we already have completed benchmark records, the job is done even if its
+  // status is stale (e.g. worker crashed after finishing but before marking complete).
   const jobIsActive = benchmarkJob != null &&
-    ["pending", "claimed", "running"].includes(benchmarkJob.status);
-  const jobFailed = benchmarkJob != null && benchmarkJob.status === "failed";
+    ["pending", "claimed", "running"].includes(benchmarkJob.status) &&
+    !hasAnyCompleted;
+  const jobFailed = benchmarkJob != null && benchmarkJob.status === "failed" && !hasAnyCompleted;
 
   // Parse HF job URL from the progress_data if available
   const hfJobUrl = benchmarkJob?.progress_data?.hf_job_url as string | undefined;
