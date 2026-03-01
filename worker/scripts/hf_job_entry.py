@@ -62,6 +62,17 @@ def main():
     lora_cfg = json.loads(lora_config_json)
     training_cfg = json.loads(training_config_json)
 
+    # Create trackio space as private before TRL's internal init
+    trackio_space_id = os.environ.get("TRACKIO_SPACE_ID")
+    if trackio_space_id:
+        import trackio
+        trackio.init(
+            project="ecole",
+            name=os.environ.get("ECOLE_RUN_NAME", "ecole-training"),
+            space_id=trackio_space_id,
+            private=True,
+        )
+
     print(f"[ecole-hf-job] Base model: {base_model}")
     print(f"[ecole-hf-job] Loading dataset from {dataset_repo}")
     print(f"[ecole-hf-job] Output repo: {output_repo}")
