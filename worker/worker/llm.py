@@ -9,8 +9,8 @@ from mistralai import Mistral
 
 
 ANTHROPIC_MODEL = "claude-sonnet-4-6"
-MISTRAL_TEXT_MODEL = "mistral-large-latest"
-MISTRAL_VISION_MODEL = "pixtral-large-latest"
+MISTRAL_TEXT_MODEL = "mistral-large-3-25-12"
+MISTRAL_VISION_MODEL = "pixtral-large-24-11"
 
 
 @dataclass
