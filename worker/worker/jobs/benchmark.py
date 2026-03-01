@@ -318,7 +318,7 @@ def _run_hf_jobs(
         stage = job_info.status.stage
         print(f"[benchmark:hf_jobs] Job {hf_job_id} status: {stage}")
 
-        # Report progress
+        # Report progress (always include hf_job_url so frontend can display it)
         if stage in ("RUNNING", "COMPLETED", "ERROR"):
             try:
                 log_text = "".join(fetch_job_logs(job_id=hf_job_id, token=hf_token))
@@ -326,6 +326,8 @@ def _run_hf_jobs(
                     client.report_progress(job["id"], {
                         "status": "running",
                         "label": "hf_inference",
+                        "compute_mode": "hf_jobs",
+                        "hf_job_url": hf_job_url,
                         "log_tail": log_text[-2000:],
                     })
             except Exception as e:
@@ -373,6 +375,9 @@ def _run_hf_jobs(
     llm = create_llm_client(provider, keys)
     print(f"[benchmark:hf_jobs] Using LLM provider: {provider}")
 
+    # Persistent progress fields so the frontend always sees the HF job link
+    hf_progress = {"compute_mode": "hf_jobs", "hf_job_url": hf_job_url}
+
     # --- Score base results ---
     if base_raw:
         print(f"[benchmark:hf_jobs] Scoring {len(base_raw)} base model answers")
@@ -381,7 +386,7 @@ def _run_hf_jobs(
             project_id=project_id,
             model_type="base",
         )
-        base_results = _score_raw_answers(llm, base_raw, client, job["id"], "base")
+        base_results = _score_raw_answers(llm, base_raw, client, job["id"], "base", progress_extra=hf_progress)
         _save_benchmark(client, base_benchmark["id"], base_results)
 
     # --- Score finetuned results ---
@@ -392,7 +397,7 @@ def _run_hf_jobs(
             project_id=project_id,
             model_type="finetuned",
         )
-        ft_results = _score_raw_answers(llm, ft_raw, client, job["id"], "finetuned")
+        ft_results = _score_raw_answers(llm, ft_raw, client, job["id"], "finetuned", progress_extra=hf_progress)
         _save_benchmark(client, ft_benchmark["id"], ft_results)
 
     # --- Teacher model evaluation (API-based, runs locally) ---
@@ -404,6 +409,7 @@ def _run_hf_jobs(
         job=job,
         training_run_id=training_run_id,
         project_id=project_id,
+        progress_extra=hf_progress,
     )
 
     # Update project status
@@ -417,8 +423,10 @@ def _score_raw_answers(
     client: APIClient,
     job_id: str,
     label: str,
+    progress_extra: dict | None = None,
 ) -> list[dict]:
     """Score raw {question, expected, answer} entries with LLM judge + deterministic metrics."""
+    extra = progress_extra or {}
     results = []
     for i, entry in enumerate(raw_entries):
         question = entry["question"]
@@ -444,6 +452,7 @@ def _score_raw_answers(
                 "label": f"scoring-{label}",
                 "evaluated": i + 1,
                 "total": len(raw_entries),
+                **extra,
             })
             print(f"[benchmark] scoring-{label}: {i + 1}/{len(raw_entries)}")
 
@@ -513,8 +522,10 @@ def _evaluate_teacher(
     job: dict,
     training_run_id: str,
     project_id: str,
+    progress_extra: dict | None = None,
 ) -> None:
     """Evaluate the teacher LLM (Claude/Mistral) on the eval set."""
+    extra = progress_extra or {}
     teacher_benchmark = client.create_benchmark(
         training_run_id=training_run_id,
         project_id=project_id,
@@ -555,10 +566,35 @@ def _evaluate_teacher(
                 "label": "teacher",
                 "evaluated": i + 1,
                 "total": len(eval_items),
+                **extra,
             })
             print(f"[benchmark] teacher: {i + 1}/{len(eval_items)}")
 
     _save_benchmark(client, teacher_benchmark["id"], results)
+
+
+def _generate_batch(model, tokenizer, input_texts: list[str], max_new_tokens: int = 512) -> list[str]:
+    """Generate answers for a batch of inputs."""
+    import torch
+
+    inputs = tokenizer(
+        input_texts, return_tensors="pt", padding=True, truncation=True,
+    ).to(model.device)
+
+    with torch.no_grad():
+        outputs = model.generate(
+            **inputs,
+            max_new_tokens=max_new_tokens,
+            do_sample=False,
+            temperature=1.0,
+            pad_token_id=tokenizer.pad_token_id,
+        )
+
+    answers = []
+    for i, output in enumerate(outputs):
+        generated = output[inputs["input_ids"][i].shape[0]:]
+        answers.append(tokenizer.decode(generated, skip_special_tokens=True).strip())
+    return answers
 
 
 def _evaluate_model(
@@ -569,6 +605,7 @@ def _evaluate_model(
     client: APIClient,
     job_id: str,
     label: str,
+    batch_size: int = 8,
 ) -> list[dict]:
     """Load a model, generate answers for eval items, and score with the LLM judge."""
     import torch
@@ -598,38 +635,50 @@ def _evaluate_model(
 
     model.eval()
 
+    # Prepare all inputs upfront
+    questions = [item["question"] for item in eval_items]
+    input_texts = []
+    for q in questions:
+        messages = [{"role": "user", "content": q}]
+        try:
+            text = tokenizer.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
+        except Exception:
+            text = f"Question: {q}\nAnswer:"
+        input_texts.append(text)
+
+    # Batched inference
+    all_answers = []
+    total = len(eval_items)
+    for start in range(0, total, batch_size):
+        end = min(start + batch_size, total)
+        batch_answers = _generate_batch(model, tokenizer, input_texts[start:end])
+        all_answers.extend(batch_answers)
+        print(f"[benchmark] {label} inference: {end}/{total}")
+
+    # Score answers with LLM judge
     results = []
     for i, item in enumerate(eval_items):
-        question = item["question"]
-        expected = item["answer"]
-
-        # Generate answer
-        answer = _generate_answer(model, tokenizer, question)
-
-        # Score with LLM judge
-        score_data = _judge_answer(llm, question, expected, answer)
-
-        # Compute deterministic metrics
-        metrics = compute_metrics(answer, expected)
+        score_data = _judge_answer(llm, item["question"], item["answer"], all_answers[i])
+        metrics = compute_metrics(all_answers[i], item["answer"])
 
         results.append({
-            "question": question,
-            "expected": expected,
-            "answer": answer,
+            "question": item["question"],
+            "expected": item["answer"],
+            "answer": all_answers[i],
             "score": score_data.get("score", 0),
             "reason": score_data.get("reason", ""),
             "semantic_similarity": metrics["semantic_similarity"],
             "rouge_l": metrics["rouge_l"],
         })
 
-        if (i + 1) % 5 == 0 or i == len(eval_items) - 1:
+        if (i + 1) % 5 == 0 or i == total - 1:
             client.report_progress(job_id, {
                 "status": "running",
                 "label": label,
                 "evaluated": i + 1,
-                "total": len(eval_items),
+                "total": total,
             })
-            print(f"[benchmark] {label}: {i + 1}/{len(eval_items)}")
+            print(f"[benchmark] {label} scoring: {i + 1}/{total}")
 
     # Cleanup
     del model
@@ -638,33 +687,6 @@ def _evaluate_model(
 
     return results
 
-
-def _generate_answer(model, tokenizer, question: str, max_new_tokens: int = 512) -> str:
-    """Generate an answer from the model."""
-    import torch
-
-    messages = [{"role": "user", "content": question}]
-
-    # Try chat template, fall back to plain prompt
-    try:
-        input_text = tokenizer.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
-    except Exception:
-        input_text = f"Question: {question}\nAnswer:"
-
-    inputs = tokenizer(input_text, return_tensors="pt").to(model.device)
-
-    with torch.no_grad():
-        outputs = model.generate(
-            **inputs,
-            max_new_tokens=max_new_tokens,
-            do_sample=False,
-            temperature=1.0,
-            pad_token_id=tokenizer.pad_token_id,
-        )
-
-    # Decode only the generated tokens
-    generated = outputs[0][inputs["input_ids"].shape[1]:]
-    return tokenizer.decode(generated, skip_special_tokens=True).strip()
 
 
 def _judge_answer(llm: LLMClient, question: str, expected: str, answer: str) -> dict:

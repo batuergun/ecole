@@ -40,18 +40,26 @@ def _load_causal_model(model_name: str, dtype: torch.dtype, token: str):
     )
 
 
-def _generate_answer(model, tokenizer, question: str, max_new_tokens: int = 512) -> str:
-    """Generate an answer from the model."""
-    messages = [{"role": "user", "content": question}]
+def _prepare_inputs(tokenizer, questions: list[str]) -> list[str]:
+    """Format questions as chat-templated strings."""
+    formatted = []
+    for question in questions:
+        messages = [{"role": "user", "content": question}]
+        try:
+            text = tokenizer.apply_chat_template(
+                messages, tokenize=False, add_generation_prompt=True,
+            )
+        except Exception:
+            text = f"Question: {question}\nAnswer:"
+        formatted.append(text)
+    return formatted
 
-    try:
-        input_text = tokenizer.apply_chat_template(
-            messages, tokenize=False, add_generation_prompt=True,
-        )
-    except Exception:
-        input_text = f"Question: {question}\nAnswer:"
 
-    inputs = tokenizer(input_text, return_tensors="pt").to(model.device)
+def _generate_batch(model, tokenizer, input_texts: list[str], max_new_tokens: int = 512) -> list[str]:
+    """Generate answers for a batch of inputs."""
+    inputs = tokenizer(
+        input_texts, return_tensors="pt", padding=True, truncation=True,
+    ).to(model.device)
 
     with torch.no_grad():
         outputs = model.generate(
@@ -62,30 +70,35 @@ def _generate_answer(model, tokenizer, question: str, max_new_tokens: int = 512)
             pad_token_id=tokenizer.pad_token_id,
         )
 
-    generated = outputs[0][inputs["input_ids"].shape[1]:]
-    return tokenizer.decode(generated, skip_special_tokens=True).strip()
+    answers = []
+    for i, output in enumerate(outputs):
+        generated = output[inputs["input_ids"][i].shape[0]:]
+        answers.append(tokenizer.decode(generated, skip_special_tokens=True).strip())
+    return answers
 
 
-def _run_inference(model, tokenizer, eval_data, model_type: str) -> list[dict]:
-    """Run inference on all eval questions and return results."""
+def _run_inference(model, tokenizer, eval_data, model_type: str, batch_size: int = 8) -> list[dict]:
+    """Run batched inference on all eval questions and return results."""
     results = []
     total = len(eval_data)
+    questions = [item["question"] for item in eval_data]
+    input_texts = _prepare_inputs(tokenizer, questions)
 
-    for i, item in enumerate(eval_data):
-        question = item["question"]
-        expected = item["expected"]
+    for start in range(0, total, batch_size):
+        end = min(start + batch_size, total)
+        batch_texts = input_texts[start:end]
+        batch_answers = _generate_batch(model, tokenizer, batch_texts)
 
-        answer = _generate_answer(model, tokenizer, question)
+        for i, answer in enumerate(batch_answers):
+            idx = start + i
+            results.append({
+                "question": eval_data[idx]["question"],
+                "expected": eval_data[idx]["expected"],
+                "answer": answer,
+                "model_type": model_type,
+            })
 
-        results.append({
-            "question": question,
-            "expected": expected,
-            "answer": answer,
-            "model_type": model_type,
-        })
-
-        if (i + 1) % 5 == 0 or i == total - 1:
-            print(f"[ecole-hf-bench] {model_type}: {i + 1}/{total}")
+        print(f"[ecole-hf-bench] {model_type}: {end}/{total}")
 
     return results
 
