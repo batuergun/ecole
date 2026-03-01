@@ -458,16 +458,16 @@
           <p>AI-powered dataset generation creates high-quality training pairs from your source material.</p>
         </div>
         <div class="card">
-          <img src="screenshots/Screenshot 2026-03-01 at 14.54.24.png" alt="Training in progress">
+          <img src="screenshots/Screenshot 2026-03-01 at 14.58.12.png" alt="Training completed">
           <span class="number">03</span>
           <h3>Train</h3>
-          <p>Launch GPU training runs with optimized defaults. Monitor progress in real time.</p>
+          <p>Launch on HuggingFace Jobs with your choice of GPU. Model is pushed to the Hub automatically.</p>
         </div>
         <div class="card">
-          <img src="screenshots/Screenshot 2026-03-01 at 14.52.47.png" alt="Deploy to HuggingFace">
+          <img src="screenshots/Screenshot 2026-03-01 at 14.59.34.png" alt="Evaluation results">
           <span class="number">04</span>
-          <h3>Deploy</h3>
-          <p>Pick your hardware, launch on HuggingFace Jobs, and push your model to the Hub.</p>
+          <h3>Evaluate</h3>
+          <p>Compare your fine-tuned model against the base and teacher models with automated benchmarks.</p>
         </div>
       </div>
     </div>
@@ -523,7 +523,7 @@
           useCORS: true,
           logging: false
         });
-        pdf.addImage(canvas.toDataURL('image/png'), 'PNG', 0, 0, W, H);
+        pdf.addImage(canvas.toDataURL('image/jpeg', 0.85), 'JPEG', 0, 0, W, H);
       }
 
       pdf.save('ecole-pitch.pdf');
