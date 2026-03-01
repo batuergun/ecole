@@ -104,6 +104,8 @@ export const api = {
     }),
   listBenchmarks: (projectId: string) =>
     request<Benchmark[]>(`/projects/${projectId}/benchmark`),
+  benchmarkJobStatus: (projectId: string) =>
+    request<Job>(`/projects/${projectId}/benchmark/status`),
 
   // Jobs
   deleteJob: (projectId: string, jobId: string) =>
@@ -116,6 +118,26 @@ export const api = {
   getKeys: () => request<{ anthropic_key: string; mistral_key: string; hf_token: string }>("/settings/keys"),
   updateKeys: (data: { anthropic_key?: string; mistral_key?: string; hf_token?: string }) =>
     request("/settings/keys", { method: "PUT", body: JSON.stringify(data) }),
+
+  // Chat
+  createChatSession: (projectId: string, data: { training_run_id: string; inference_mode: string }) =>
+    request<ChatSession>(`/projects/${projectId}/chat`, {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
+  listChatSessions: (projectId: string) =>
+    request<ChatSession[]>(`/projects/${projectId}/chat`),
+  getChatSession: (projectId: string, sessionId: string) =>
+    request<ChatSession>(`/projects/${projectId}/chat/${sessionId}`),
+  deleteChatSession: (projectId: string, sessionId: string) =>
+    request(`/projects/${projectId}/chat/${sessionId}`, { method: "DELETE" }),
+  sendChatMessage: (projectId: string, sessionId: string, content: string) =>
+    request<{ user_message: ChatMessage; assistant_message: ChatMessage }>(
+      `/projects/${projectId}/chat/${sessionId}/messages`,
+      { method: "POST", body: JSON.stringify({ content }) }
+    ),
+  listChatMessages: (projectId: string, sessionId: string) =>
+    request<ChatMessage[]>(`/projects/${projectId}/chat/${sessionId}/messages`),
 };
 
 // Types
@@ -277,4 +299,57 @@ export interface ActivityJob {
 export interface Activity {
   training_runs: ActivityTrainingRun[];
   jobs: ActivityJob[];
+}
+
+export interface ChatSession {
+  id: string;
+  project_id: string;
+  training_run_id: string;
+  inference_mode: string;
+  hf_endpoint_name: string | null;
+  hf_endpoint_url: string | null;
+  hf_endpoint_status: string | null;
+  job_id: string | null;
+  status: string;
+  error_message: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ChatMessage {
+  id: string;
+  session_id: string;
+  role: string;
+  content: string;
+  status: string;
+  created_at: string;
+}
+
+export interface ChatStreamEvent {
+  type: "delta" | "done" | "error" | "session_closed";
+  message_id?: string;
+  delta?: string;
+  content?: string;
+}
+
+export function subscribeToChatStream(
+  projectId: string,
+  sessionId: string,
+  onEvent: (event: ChatStreamEvent) => void,
+): EventSource {
+  const es = new EventSource(
+    `${API_BASE}/projects/${projectId}/chat/${sessionId}/stream`,
+  );
+  es.onmessage = (e) => {
+    try {
+      const data = JSON.parse(e.data) as ChatStreamEvent;
+      onEvent(data);
+    } catch {
+      // ignore parse errors
+    }
+  };
+  es.onerror = () => {
+    // EventSource will auto-reconnect
+  };
+  return es;
 }

@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { api, type Benchmark, type TrainingRun } from "@/lib/api";
+import { api, type Benchmark, type TrainingRun, type Job } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -55,10 +55,17 @@ export function BenchmarkTab({ projectId }: { projectId: string }) {
     queryFn: () => api.listTrainingRuns(projectId),
   });
 
+  const { data: benchmarkJob } = useQuery({
+    queryKey: ["benchmark-job", projectId],
+    queryFn: () => api.benchmarkJobStatus(projectId).catch(() => null),
+    refetchInterval: 5000,
+  });
+
   const evaluateMutation = useMutation({
     mutationFn: (runId: string) => api.triggerBenchmark(projectId, runId),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["benchmarks", projectId] });
+      queryClient.invalidateQueries({ queryKey: ["benchmark-job", projectId] });
       setSelectedRunId(null);
       toast.success("Evaluation started");
     },
@@ -71,6 +78,11 @@ export function BenchmarkTab({ projectId }: { projectId: string }) {
   const pendingBenchmarks = benchmarks?.filter((b: Benchmark) => b.status === "pending" || b.status === "running") ?? [];
   const failedBenchmarks = benchmarks?.filter((b: Benchmark) => b.status === "failed") ?? [];
   const hasAnyCompleted = benchmarks?.some((b: Benchmark) => b.status === "completed") ?? false;
+
+  // Check if a benchmark job is actively running (pending/claimed/running in the jobs table)
+  const jobIsActive = benchmarkJob != null &&
+    ["pending", "claimed", "running"].includes(benchmarkJob.status);
+  const jobFailed = benchmarkJob != null && benchmarkJob.status === "failed";
 
   // Only count a run as "evaluated" if it has at least one successful benchmark
   // Runs with only failed benchmarks should be retryable
@@ -86,21 +98,29 @@ export function BenchmarkTab({ projectId }: { projectId: string }) {
   const effectiveSelectedId = selectedRunId ?? (availableRuns.length === 1 ? availableRuns[0].id : null);
   const selectedRun = availableRuns.find((r) => r.id === effectiveSelectedId);
 
-  // Find the run being evaluated (for pending state)
+  // Find the run being evaluated (for pending state) — check both benchmark records and job status
   const pendingRunId = pendingBenchmarks[0]?.training_run_id;
   const pendingRun = completedRuns.find((r) => r.id === pendingRunId);
+  const isEvaluating = pendingBenchmarks.length > 0 || jobIsActive;
 
   // Find runs that failed evaluation (only failed, no successful benchmarks)
   const failedRunIds = new Set(failedBenchmarks.map((b) => b.training_run_id));
   const failedOnlyRunIds = [...failedRunIds].filter((id) => !successfullyEvaluatedRunIds.has(id));
-  const failedRun = failedOnlyRunIds.length > 0 ? completedRuns.find((r) => failedOnlyRunIds.includes(r.id)) : null;
+  const failedRunFromBenchmarks = failedOnlyRunIds.length > 0 ? completedRuns.find((r) => failedOnlyRunIds.includes(r.id)) : null;
+
+  // Also check if the job itself failed (even without benchmark records)
+  const failedJobRunId = jobFailed && benchmarkJob?.progress_data
+    ? (benchmarkJob.progress_data as Record<string, unknown>)?.training_run_id as string | undefined
+    : undefined;
+  const failedRunFromJob = failedJobRunId ? completedRuns.find((r) => r.id === failedJobRunId) : null;
+  const failedRun = failedRunFromBenchmarks ?? failedRunFromJob ?? (jobFailed ? completedRuns[0] : null);
 
   if (isLoading) {
     return <div className="h-32 animate-pulse bg-muted" />;
   }
 
-  // Empty state — no benchmarks and no pending ones
-  if (!hasAnyCompleted && pendingBenchmarks.length === 0) {
+  // Empty state — no benchmarks and nothing running
+  if (!hasAnyCompleted && !isEvaluating) {
     return (
       <div className="flex flex-col items-center justify-center py-12 text-center space-y-4">
         {failedRun ? (
@@ -159,7 +179,7 @@ export function BenchmarkTab({ projectId }: { projectId: string }) {
 
   return (
     <div className="space-y-6">
-      {pendingBenchmarks.length > 0 && (
+      {isEvaluating && (
         <Card>
           <CardContent className="py-4">
             <div className="flex items-center gap-3">
@@ -180,7 +200,7 @@ export function BenchmarkTab({ projectId }: { projectId: string }) {
         </Card>
       )}
 
-      {failedRun && pendingBenchmarks.length === 0 && (
+      {failedRun && !isEvaluating && (
         <Card className="border-destructive/30">
           <CardContent className="py-4">
             <div className="flex items-center justify-between">
@@ -342,7 +362,7 @@ export function BenchmarkTab({ projectId }: { projectId: string }) {
       )}
 
       {/* Re-evaluate with a different run */}
-      {hasAnyCompleted && unevaluatedRuns.length > 0 && pendingBenchmarks.length === 0 && (
+      {hasAnyCompleted && unevaluatedRuns.length > 0 && !isEvaluating && (
         <div className="pt-4 border-t border-border">
           <p className="text-xs text-muted-foreground mb-3 font-mono">Evaluate another training run</p>
           <RunSelector

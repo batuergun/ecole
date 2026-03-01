@@ -9,7 +9,8 @@ import { DataTab } from "@/components/tabs/DataTab";
 import { DatasetTab } from "@/components/tabs/DatasetTab";
 import { TrainingTab } from "@/components/tabs/TrainingTab";
 import { BenchmarkTab } from "@/components/tabs/BenchmarkTab";
-import { Trash2, Check, ChevronDown, Lock, ArrowRight } from "lucide-react";
+import { Trash2, Check, ChevronDown, Lock, ArrowRight, MessageSquare } from "lucide-react";
+import { Link } from "react-router-dom";
 
 type StepId = "upload" | "dataset" | "training" | "benchmark";
 
@@ -370,6 +371,18 @@ export default function ProjectDetail() {
           );
         })}
       </div>
+
+      {/* Demo Chat button — visible when benchmark is completed */}
+      {hasCompletedBenchmark && (
+        <div className="mt-8 pt-6 border-t border-border">
+          <Link to={`/projects/${id}/chat`}>
+            <Button className="font-mono text-xs gap-1.5 bg-ecole-orange text-white hover:bg-ecole-orange-light">
+              <MessageSquare className="h-3.5 w-3.5" />
+              Open Demo Chat
+            </Button>
+          </Link>
+        </div>
+      )}
     </div>
   );
 }
