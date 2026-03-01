@@ -28,8 +28,9 @@ QA_GENERATION_PROMPT = """Generate {n} diverse question-answer pairs from the fo
 
 ## Requirements
 - Questions should be natural and varied: factual recall, inferential reasoning, application-based, and comparative
-- Each answer MUST begin with a step-by-step reasoning trace wrapped in <think>...</think> tags, followed by the final answer
-- The reasoning trace should show the thought process: what the question asks, relevant facts from the source, and how they connect
+- Each answer MUST begin with a detailed reasoning trace wrapped in <think>...</think> tags, followed by the final answer
+- The reasoning trace should be thorough and multi-step, like an internal monologue: break the problem down, consider what information is relevant, weigh different angles, recall specific details from the source, work through the logic, and arrive at a conclusion
+- Do NOT just restate the question and answer inside the think tags — show genuine analytical thinking across multiple sentences
 - After the </think> tag, provide the comprehensive but concise final answer
 - Each Q&A pair must be self-contained (understandable without seeing the source)
 - Vary question complexity from simple to advanced
@@ -38,7 +39,7 @@ QA_GENERATION_PROMPT = """Generate {n} diverse question-answer pairs from the fo
 ## Output Format
 Return a JSON array only, no other text:
 [
-  {{"question": "...", "answer": "<think>\\nStep-by-step reasoning here...\\n</think>\\nFinal answer here."}},
+  {{"question": "...", "answer": "<think>\\nLet me break this down. The question is asking about... Looking at the source material, I can see that... This connects to... Considering these factors together, the key point is...\\n</think>\\nFinal answer here."}},
   ...
 ]"""
 
