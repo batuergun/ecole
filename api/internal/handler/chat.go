@@ -429,7 +429,7 @@ func (h *ChatHandler) createHFEndpoint(sessionID, projectID, baseModel string, h
 	})
 
 	req, _ := http.NewRequest("POST",
-		fmt.Sprintf("https://api.endpoints.huggingface.cloud/v2/%s/endpoint", namespace),
+		fmt.Sprintf("https://api.endpoints.huggingface.cloud/v2/endpoint/%s", namespace),
 		bytes.NewReader(body))
 	req.Header.Set("Authorization", "Bearer "+hfToken)
 	req.Header.Set("Content-Type", "application/json")
@@ -504,7 +504,7 @@ func (h *ChatHandler) getHFNamespace(hfToken string) (string, error) {
 
 func (h *ChatHandler) pollHFEndpoint(hfToken, namespace, name string) (string, string, error) {
 	req, _ := http.NewRequest("GET",
-		fmt.Sprintf("https://api.endpoints.huggingface.cloud/v2/%s/endpoint/%s", namespace, name),
+		fmt.Sprintf("https://api.endpoints.huggingface.cloud/v2/endpoint/%s/%s", namespace, name),
 		nil)
 	req.Header.Set("Authorization", "Bearer "+hfToken)
 
@@ -536,7 +536,7 @@ func (h *ChatHandler) deleteHFEndpoint(projectID, endpointName string) {
 	}
 
 	req, _ := http.NewRequest("DELETE",
-		fmt.Sprintf("https://api.endpoints.huggingface.cloud/v2/%s/endpoint/%s", namespace, endpointName),
+		fmt.Sprintf("https://api.endpoints.huggingface.cloud/v2/endpoint/%s/%s", namespace, endpointName),
 		nil)
 	req.Header.Set("Authorization", "Bearer "+hfToken)
 	http.DefaultClient.Do(req)
